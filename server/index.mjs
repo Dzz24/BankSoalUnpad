@@ -3,6 +3,9 @@ import { createServer } from 'node:http'
 import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import express from 'express'
+import { createAuth, requireSameOrigin } from './auth.mjs'
+import { createPool } from './database.mjs'
+import { draftExample } from './seed.ts'
 import { ApiError, inputObject } from './validation.mjs'
 import { openWorkspace } from './workspace.mjs'
 
@@ -15,7 +18,9 @@ const http = createServer(app)
 if (!Number.isInteger(port) || port < 0 || port > 65_535) throw new Error('Gunakan port TCP yang valid.')
 if (!options.dev && !existsSync(resolve(root, 'dist/index.html'))) throw new Error('Jalankan npm run build terlebih dahulu.')
 
-const workspace = await openWorkspace()
+const pool = createPool()
+const workspace = await openWorkspace(pool)
+const auth = createAuth(pool)
 const api = express.Router()
 app.disable('x-powered-by')
 
@@ -23,7 +28,8 @@ api.use((_request, response, next) => {
   response.set('Cache-Control', 'no-store')
   next()
 })
-api.use(express.json({limit: '128kb'}))
+api.use(requireSameOrigin)
+api.use('/auth', auth.router)
 api.get('/health', async (_request, response) => {
   try {
     await workspace.health()
@@ -32,18 +38,21 @@ api.get('/health', async (_request, response) => {
     response.status(503).json({status: 'unavailable', message: 'PostgreSQL belum dapat dihubungi.'})
   }
 })
+api.use(auth.requireSession)
+api.use(express.json({limit: '128kb'}))
 api.get('/workspace', async (_request, response) => response.json(await workspace.list()))
+api.get('/questions/example', (_request, response) => response.json(draftExample))
 api.post('/questions', async (request, response) => {
   const body = inputObject(request.body)
-  response.status(201).json(await workspace.saveQuestion(body.id, body, false))
+  response.status(201).json(await workspace.saveQuestion(body.id, body, false, response.locals.account))
 })
-api.put('/questions/:id', async (request, response) => response.json(await workspace.saveQuestion(request.params.id, request.body, true)))
-api.post('/questions/:id/review', async (request, response) => response.json(await workspace.decide(request.params.id, request.body)))
+api.put('/questions/:id', async (request, response) => response.json(await workspace.saveQuestion(request.params.id, request.body, true, response.locals.account)))
+api.post('/questions/:id/review', async (request, response) => response.json(await workspace.decide(request.params.id, request.body, response.locals.account)))
 api.get('/questions/:id/history', async (request, response) => response.json(await workspace.history(request.params.id)))
-api.post('/packages', async (request, response) => response.status(201).json(await workspace.savePackage(request.body)))
+api.post('/packages', async (request, response) => response.status(201).json(await workspace.savePackage(request.body, response.locals.account)))
 api.get('/audit', async (_request, response) => response.json(await workspace.audit()))
 api.post('/reports/questions', async (request, response) => {
-  const csv = await workspace.exportReport(request.body)
+  const csv = await workspace.exportReport(request.body, response.locals.account)
   response.attachment('laporan-bank-soal.csv').type('text/csv; charset=utf-8').send(csv)
 })
 api.use((_request, response) => response.status(404).json({message: 'Endpoint API tidak ditemukan.'}))

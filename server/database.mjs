@@ -36,10 +36,14 @@ export async function transaction(pool, operation, readOnly = false) {
   }
 }
 
+export async function prepareSchema(client) {
+  await client.query('SELECT pg_advisory_xact_lock(931272, 1)')
+  await client.query(schema)
+}
+
 export async function initializeDatabase(pool, source, populate, matchesExistingDemo) {
   return transaction(pool, async (client) => {
-    await client.query('SELECT pg_advisory_xact_lock(931272, 1)')
-    await client.query(schema)
+    await prepareSchema(client)
     const {rows: [marker]} = await client.query("SELECT value FROM bank_soal_metadata WHERE key = 'initialized_from'")
     if (marker) {
       if (source === 'demo' || source === marker.value) return false

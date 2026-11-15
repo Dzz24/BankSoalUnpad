@@ -426,6 +426,111 @@ legend { padding: 0; font-weight: 670; font-size: 13px; }
 .version-preview { margin-top: 8px; }
 .version-preview ol { margin: 7px 0; padding-left: 23px; }
 .version-preview li { overflow-wrap: anywhere; }
+.sign-out-error { grid-column: 1 / -1; }
+
+.auth-page {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: 32px 22px;
+}
+.auth-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  width: min(100%, 980px);
+  min-height: 535px;
+  overflow: hidden;
+  border: 1px solid #dce3ee;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: 0 22px 64px rgb(19 43 69 / 12%), 0 2px 7px rgb(19 43 69 / 5%);
+}
+.auth-brand {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 40px;
+  min-width: 0;
+  padding: 45px;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 112% 10%, #254d76, transparent 72%), #132b45;
+  color: white;
+}
+.auth-brand::before, .auth-brand::after {
+  position: absolute;
+  z-index: -1;
+  top: -112px;
+  right: -122px;
+  width: 352px;
+  aspect-ratio: 1;
+  border: 1px solid rgb(181 208 243 / 20%);
+  border-radius: 50%;
+  content: '';
+}
+.auth-brand::after { top: -74px; right: -160px; }
+.auth-brand img { display: block; object-fit: contain; }
+.auth-brand-copy::before {
+  display: block;
+  width: 42px;
+  height: 4px;
+  margin-bottom: 21px;
+  border-radius: 3px;
+  background: var(--yellow);
+  content: '';
+}
+.auth-university { color: #d0dbed; font-size: 13px; font-weight: 590; }
+.auth-product {
+  max-width: 360px;
+  margin-top: 9px;
+  font-size: clamp(37px, 5.9vw, 62px);
+  font-weight: 750;
+  letter-spacing: -.065em;
+  line-height: 1.01;
+}
+.auth-description { max-width: 290px; margin-top: 16px; color: #d4e0ee; font-size: 14px; line-height: 1.6; }
+.auth-content { display: grid; place-items: center; padding: 38px clamp(23px, 5vw, 66px); }
+.auth-form-wrap { width: min(100%, 350px); }
+.auth-heading { margin-bottom: 26px; }
+.auth-heading h1 { font-size: clamp(32px, 4vw, 43px); }
+.auth-heading p { margin-top: 8px; color: var(--muted); font-size: 14px; }
+.auth-form { display: grid; gap: 17px; }
+.auth-field { display: grid; gap: 6px; }
+.auth-field label { color: var(--ink); font-size: 13px; font-weight: 670; }
+.auth-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 11px;
+  color: var(--muted);
+  border: 1px solid #dce4ee;
+  border-radius: 10px;
+  background: #fafbfe;
+}
+.auth-input:focus-within { outline: 2px solid #2f66c2; outline-offset: 1px; }
+.auth-input input { flex: 1 1 auto; width: 100%; min-height: 46px; padding: 8px 0; border: 0; outline: 0; color: var(--ink); background: transparent; font-size: 14px; }
+.auth-input input:focus-visible { outline: 0; }
+.auth-reveal { display: grid; flex: 0 0 auto; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 6px; color: var(--muted); background: transparent; }
+.auth-reveal:hover { background: #edf1f7; color: var(--ink); }
+.auth-submit { justify-content: space-between; width: 100%; min-height: 48px; margin-top: 4px; font-size: 14px; }
+.auth-status { color: var(--muted); font-size: 13px; }
+.auth-form-wrap > .form-error + .button { margin-top: 12px; }
+.ai-message > .form-error { margin-top: 9px; }
+
+@media (max-width: 680px) {
+  .auth-page { padding: 20px 15px; }
+  .auth-shell { grid-template-columns: 1fr; min-height: 0; max-width: 470px; border-radius: 17px; }
+  .auth-brand { flex-direction: row; align-items: center; justify-content: flex-start; gap: 14px; padding: 19px 23px; }
+  .auth-brand img { width: 48px; height: 48px; }
+  .auth-brand-copy::before, .auth-description { display: none; }
+  .auth-university { font-size: 11px; }
+  .auth-product { margin-top: 3px; font-size: 25px; letter-spacing: -.045em; line-height: 1.15; }
+  .auth-content { padding: 28px 22px 30px; }
+  .auth-heading { margin-bottom: 22px; }
+}
 
 @media (max-width: 1180px) {
   :root { --sidebar-width: 208px; }

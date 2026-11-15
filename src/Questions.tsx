@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronLeft, ChevronRight, ClipboardCheck, Clock3, Eye, History, ListChecks, Plus, RotateCcw, Search, Sparkles, X } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { courses, formats, formatDate, levels, seedQuestions, statusInfo, type Course, type Format, type Level, type Question, type QuestionFields, type QuestionInput, type ReviewStatus } from './data'
+import { getDraftExample } from './api'
+import { courses, formats, formatDate, levels, statusInfo, type Course, type Format, type Level, type Question, type QuestionFields, type QuestionInput, type ReviewStatus } from './data'
 import { QuestionHistoryPanel } from './History'
 import { Dialog, Empty, PageHeading, Pill, StatusPill } from './ui'
 
@@ -211,10 +212,24 @@ export function QuestionEditor({question, onSave}: {question?: Question; onSave:
   const [changeNote, setChangeNote] = useState('')
   const [pending, setPending] = useState(false)
   const [mode, setMode] = useState<'manual' | 'ai'>('manual')
+  const [loadingExample, setLoadingExample] = useState(false)
 
   function change<K extends keyof EditorValues>(key: K, value: EditorValues[K]) {
     setDraft((previous) => ({...previous, [key]: value}))
     setError('')
+  }
+
+  async function loadExample() {
+    setLoadingExample(true)
+    setError('')
+    try {
+      setDraft(await getDraftExample())
+      setMode('manual')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Contoh draf gagal dimuat.')
+    } finally {
+      setLoadingExample(false)
+    }
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -251,12 +266,13 @@ export function QuestionEditor({question, onSave}: {question?: Question; onSave:
     <div className="editor-layout">
       <form className="card editor-form" onSubmit={save} noValidate>
         <div className="segmented" aria-label="Cara membuat soal">
-          <button type="button" disabled={pending} aria-pressed={mode === 'manual'} onClick={() => setMode('manual')}><BookOpen size={16} /> Editor Soal</button>
-          <button type="button" disabled={pending} aria-pressed={mode === 'ai'} onClick={() => setMode('ai')}><Sparkles size={16} /> Bantuan AI</button>
+          <button type="button" disabled={pending || loadingExample} aria-pressed={mode === 'manual'} onClick={() => {setMode('manual'); setError('')}}><BookOpen size={16} /> Editor Soal</button>
+          <button type="button" disabled={pending || loadingExample} aria-pressed={mode === 'ai'} onClick={() => {setMode('ai'); setError('')}}><Sparkles size={16} /> Bantuan AI</button>
         </div>
         {mode === 'ai' ? <div className="inset ai-message">
           <h3>Contoh Draf AI</h3><p>Muat satu soal contoh tentang normalisasi basis data untuk mencoba alur penyuntingan.</p>
-          <button type="button" className="button secondary" onClick={() => {setDraft({...editorValues(seedQuestions[1]), topic: 'Normalisasi basis data'}); setMode('manual'); setError('')}}><Sparkles size={16} /> Muat Contoh ke Editor</button>
+          {error && <p className="form-error" role="alert">{error}</p>}
+          <button type="button" className="button secondary" disabled={loadingExample} onClick={() => void loadExample()}><Sparkles size={16} /> {loadingExample ? 'Memuat contoh…' : 'Muat Contoh ke Editor'}</button>
         </div> : <>
           <div className="form-grid">
             <label className="field">Judul Soal<input value={draft.title} maxLength={180} onChange={(event) => change('title', event.target.value)} placeholder="Misalnya, Normalisasi Basis Data" required /></label>

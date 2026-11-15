@@ -1,6 +1,9 @@
-import type { AuditEntry, ExamPackage, PackageInput, Question, QuestionHistory, QuestionInput, ReviewStatus } from './data'
+import type { AuditEntry, ExamPackage, PackageInput, Question, QuestionFields, QuestionHistory, QuestionInput, ReviewStatus } from './data'
 
 export type Workspace = {questions: Question[]; packages: ExamPackage[]}
+export type AuthUser = {username: string; name: string}
+export type Session = {user: AuthUser; expiresAt: string}
+export const sessionEndedEvent = 'bank-soal:session-ended'
 
 async function request(path: string, init?: RequestInit) {
   let response: Response
@@ -11,6 +14,7 @@ async function request(path: string, init?: RequestInit) {
     throw new Error('Backend tidak dapat dihubungi. Periksa server dan coba lagi.')
   }
   if (!response.ok) {
+    if (response.status === 401 && !path.startsWith('/auth/')) window.dispatchEvent(new Event(sessionEndedEvent))
     const body = await response.json().catch(() => null)
     throw new Error(body?.message || 'Backend gagal memproses permintaan.')
   }
@@ -29,7 +33,11 @@ function body(method: 'POST' | 'PUT', payload: object): RequestInit {
   return {method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)}
 }
 
+export const getSession = (signal?: AbortSignal) => json<{session: Session | null}>('/auth/session', {signal})
+export const logIn = (username: string, password: string) => json<{session: Session}>('/auth/login', body('POST', {username, password}))
+export const logOut = () => request('/auth/logout', {method: 'POST'})
 export const getWorkspace = (signal?: AbortSignal) => json<Workspace>('/workspace', {signal})
+export const getDraftExample = () => json<QuestionFields>('/questions/example')
 
 export function saveQuestion(id: string, input: QuestionInput, revision?: number) {
   return revision === undefined

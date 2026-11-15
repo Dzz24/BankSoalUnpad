@@ -10,10 +10,13 @@ Gunakan Node.js 22.18 atau lebih baru dan server PostgreSQL yang berjalan. Siapk
 
 ```sh
 npm ci
+npm run auth:create-user -- admin --name "Admin Bank Soal"
 npm run dev
 ```
 
-Buka [http://127.0.0.1:5173](http://127.0.0.1:5173). Satu proses menjalankan frontend dan API. Aplikasi membuat tabel dan mengisi data contoh pada penggunaan pertama jika database masih kosong.
+Buat akun sekali per pengguna. Perintah di atas membuat kata sandi acak dan menampilkannya di terminal. Gunakan `--credentials-file storage/login-lokal.txt` untuk menyimpannya ke berkas lokal baru yang dikecualikan dari Git. Akun `admin` yang sudah disiapkan di komputer ini dapat memakai kredensial dari berkas tersebut.
+
+Buka [http://127.0.0.1:5173](http://127.0.0.1:5173) dan masuk dengan akun Bank Soal. Satu proses menjalankan frontend dan API. Aplikasi membuat tabel dan mengisi data contoh pada penggunaan pertama jika database masih kosong.
 
 Untuk menjalankan build lokal, gunakan `npm run build` lalu `npm start` dan buka [http://127.0.0.1:4173](http://127.0.0.1:4173). `BANK_SOAL_PORT` memilih port HTTP.
 
@@ -49,12 +52,15 @@ Default sumbernya `storage/bank-soal.sqlite`. Gunakan `npm run db:migrate:sqlite
 
 Soal, paket, riwayat versi, dan audit tersimpan di PostgreSQL. Pratinjau CSV, riwayat impor contoh, dan pengaturan profil tampilan masih berjalan di browser. Soal dan paket dari prototipe browser dapat diunduh sebagai JSON lewat **Pengaturan Sistem** pada browser yang menyimpannya.
 
-Backend lokal memakai satu identitas **Admin Demo**. Backlog mencakup autentikasi Unpad dan hak akses, pengelolaan pengguna dan data master, pemrosesan impor CSV/XLSX di server, generasi AI, serta perhitungan CTT dan kalibrasi Rasch/IRT.
+Backend memakai akun lokal. Sesi berlaku delapan jam dan dapat ditutup melalui **Profil Akun → Keluar**. Audit log mencatat nama pengguna dari sesi yang aktif. Backlog mencakup integrasi login Unpad dan hak akses per role, pengelolaan pengguna dan data master, pemrosesan impor CSV/XLSX di server, generasi AI, serta perhitungan CTT dan kalibrasi Rasch/IRT.
 
 ## API
 
 | Metode | Endpoint | Fungsi |
 | --- | --- | --- |
+| GET | `/api/auth/session` | Periksa sesi aktif |
+| POST | `/api/auth/login` | Masuk dengan nama pengguna dan kata sandi |
+| POST | `/api/auth/logout` | Akhiri sesi aktif |
 | GET | `/api/workspace` | Daftar soal dan paket |
 | POST | `/api/questions` | Simpan soal baru sebagai draf atau ajukan review |
 | PUT | `/api/questions/:id` | Edit dan ajukan ulang soal menggunakan revisi data terakhir |
@@ -63,6 +69,8 @@ Backend lokal memakai satu identitas **Admin Demo**. Backlog mencakup autentikas
 | POST | `/api/packages` | Buat paket dari soal yang sudah disetujui |
 | GET | `/api/audit` | Audit log terbaru |
 | POST | `/api/reports/questions` | Buat dan catat ekspor CSV berdasarkan filter mata kuliah |
+
+Endpoint fitur Bank Soal memerlukan cookie sesi dari login. Endpoint pemeriksaan kesehatan server bisa diakses tanpa akun.
 
 ## Referensi desain
 
