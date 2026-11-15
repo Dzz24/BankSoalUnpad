@@ -1,4 +1,4 @@
-import { courses, formats, levels } from '../src/data.ts'
+import { courses, formats, levels } from '../shared/question-fields.js'
 
 export class ApiError extends Error {
   constructor(status, message) {

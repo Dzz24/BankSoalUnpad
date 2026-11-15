@@ -20,7 +20,23 @@ Buka [http://127.0.0.1:5173](http://127.0.0.1:5173) dan masuk dengan akun Bank S
 
 Untuk menjalankan build lokal, gunakan `npm run build` lalu `npm start` dan buka [http://127.0.0.1:4173](http://127.0.0.1:4173). `BANK_SOAL_PORT` memilih port HTTP.
 
-### Instance khusus Bank Soal di komputer ini
+## Deploy ke Vercel
+
+1. Impor repo di Vercel dengan **Root Directory** di root proyek. File `vercel.json` menetapkan preset **Vite**, build `npm run build`, dan hasil frontend di `dist`. Vercel Function di `api/handler.js` melayani Express di jalur `/api`. [Vite di Vercel](https://vercel.com/docs/frameworks/frontend/vite)
+2. Isi **Settings → Environment Variables → DATABASE_URL** dengan URL PostgreSQL cloud sesuai lingkungan deployment. Jika Supabase dipasang melalui Vercel Marketplace, fungsi Vercel memakai `POSTGRES_URL` dari integrasi saat `DATABASE_URL` kosong. Untuk koneksi Supabase manual, gunakan URL **Transaction pooler** dari menu **Connect**. Isi `DATABASE_CA_CERT` dengan seluruh isi sertifikat CA yang diunduh dari pengaturan database Supabase agar Node.js dapat memverifikasi sertifikat dan hostname. Pada proyek Supabase khusus Bank Soal, batasi akses Data API ke tabel aplikasi atau nonaktifkan Data API agar data hanya dapat diakses melalui backend. [Vercel Marketplace](https://supabase.com/docs/guides/integrations/vercel-marketplace) · [Sertifikat TLS](https://supabase.com/docs/guides/platform/ssl-enforcement) · [Pengaturan Data API](https://supabase.com/docs/guides/api/securing-your-api)
+3. Deploy commit yang memuat konfigurasi ini, lalu buka `/api/health` pada domain Vercel. Respons `{"status":"ok","database":"postgresql"}` menandakan API dan PostgreSQL bisa dihubungi.
+
+Database cloud baru diisi data contoh. Untuk membuat akun pada database cloud, buka PowerShell baru dan jalankan perintah berikut. Masukkan string koneksi cloud saat diminta, lalu gunakan kata sandi dari output untuk masuk ke website.
+
+```powershell
+$cloudUrl = Read-Host 'DATABASE_URL PostgreSQL cloud' -AsSecureString
+$env:DATABASE_URL = [System.Net.NetworkCredential]::new('', $cloudUrl).Password
+npm.cmd run auth:create-user -- admin --name 'Admin Bank Soal'
+```
+
+Kalau ingin membawa data dan akun yang sudah ada, pulihkan backup PostgreSQL lokal ke database cloud sebelum pertama kali membuka aplikasi. Kredensial database disimpan di pengaturan deployment Vercel.
+
+## Instance khusus Bank Soal di komputer ini
 
 Konfigurasi lokal di `.env` memakai database `bank_soal` di `127.0.0.1:55432`. Direktori data instance tersebut ada di `storage/postgresql/`. Jika instance berhenti, jalankan dari root proyek di PowerShell:
 
@@ -28,7 +44,7 @@ Konfigurasi lokal di `.env` memakai database `bank_soal` di `127.0.0.1:55432`. D
 & 'C:/Program Files/PostgreSQL/16/bin/pg_ctl.exe' start -D 'storage/postgresql' -l 'storage/postgresql.log' -w
 ```
 
-### Memigrasikan database SQLite lama
+## Memigrasikan database SQLite lama
 
 Hentikan backend lama agar penulisan selesai. Arahkan `DATABASE_URL` ke database PostgreSQL kosong, lalu jalankan migrasi sebelum `npm run dev` atau `npm start`.
 

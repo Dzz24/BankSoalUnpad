@@ -1,6 +1,7 @@
-import { courses, serializeCsv, statusInfo } from '../src/data.ts'
+import { serializeCsv } from '../shared/csv.js'
+import { courses, statusInfo } from '../shared/question-fields.js'
 import { initializeDatabase, transaction } from './database.mjs'
-import { seedPackages, seedQuestions } from './seed.ts'
+import { seedPackages, seedQuestions } from './seed.mjs'
 import { ApiError, checkRevision, choiceField, inputObject, questionInput, requestId, stringField } from './validation.mjs'
 
 const editableStatuses = ['draft', 'revision']

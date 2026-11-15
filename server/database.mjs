@@ -8,10 +8,41 @@ if (existsSync(envFile)) loadEnvFile(envFile)
 const schema = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8')
 
 export function createPool() {
-  const connectionString = process.env.DATABASE_URL?.trim()
-  if (!connectionString) throw new Error('Atur DATABASE_URL di .env atau variabel lingkungan. Lihat .env.example.')
+  const hosted = process.env.VERCEL === '1' && process.env.VERCEL_ENV !== 'development'
+  const connectionString = process.env.DATABASE_URL?.trim() || (hosted && process.env.POSTGRES_URL?.trim())
+  if (!connectionString) {
+    throw Object.assign(new Error('Atur DATABASE_URL di .env atau variabel lingkungan. Lihat .env.example.'), {code: 'DATABASE_URL_MISSING'})
+  }
 
-  const pool = new Pool({connectionString, application_name: 'bank-soal-unpad', connectionTimeoutMillis: 5_000})
+  if (hosted) {
+    let url
+    try {
+      url = new URL(connectionString)
+    } catch {
+      throw Object.assign(new Error('DATABASE_URL harus berupa URL PostgreSQL.'), {code: 'DATABASE_URL_INVALID'})
+    }
+    if (!url.hostname || !['postgres:', 'postgresql:'].includes(url.protocol)) {
+      throw Object.assign(new Error('DATABASE_URL harus berupa URL PostgreSQL.'), {code: 'DATABASE_URL_INVALID'})
+    }
+    const hostname = url.hostname.toLowerCase()
+    if (hostname === 'localhost' || hostname === '[::1]' || /^127\./.test(hostname)) {
+      throw Object.assign(new Error('Deployment Vercel memerlukan alamat PostgreSQL cloud.'), {code: 'DATABASE_URL_LOOPBACK'})
+    }
+  }
+
+  const options = {connectionString, application_name: 'bank-soal-unpad', connectionTimeoutMillis: 5_000, max: hosted ? 2 : 10}
+  const ca = process.env.DATABASE_CA_CERT?.trim()
+  if (ca) {
+    const url = new URL(connectionString)
+    // pg gives TLS parameters in the URL precedence over the ssl object.
+    for (const parameter of ['sslmode', 'ssl', 'sslcert', 'sslkey', 'sslrootcert']) {
+      url.searchParams.delete(parameter)
+    }
+    options.connectionString = url.toString()
+    options.ssl = {ca, rejectUnauthorized: true}
+  }
+
+  const pool = new Pool(options)
   pool.on('error', (error) => console.error('Koneksi PostgreSQL terputus:', error.code ?? error.name))
   return pool
 }

@@ -1,8 +1,4 @@
-import type { PackageInput, Question, QuestionFields } from '../src/data.ts'
-
-type Sample = Pick<Question, 'id' | 'title' | 'course' | 'status' | 'owner' | 'stem' | 'options' | 'answer' | 'explanation'>
-
-const samples: Sample[] = [
+const samples = [
   {id: 'BS-240', title: 'Implementasi Stack dan Queue', course: 'Struktur Data', status: 'approved', owner: 'D. Pratama', stem: 'Struktur data mana yang tepat untuk fitur undo pada editor teks?', options: ['Stack', 'Queue', 'Set', 'Hash map'], answer: 0, explanation: 'Stack mengambil tindakan terakhir terlebih dahulu (LIFO).'},
   {id: 'BS-241', title: 'Konsep Normalisasi Database', course: 'Basis Data', status: 'review', owner: 'N. Salsabila', stem: 'Tabel KRS memakai kunci gabungan (NIM, kode_mk). Nama mahasiswa hanya bergantung pada NIM. Perubahan mana yang menghilangkan ketergantungan parsial tersebut?', options: ['Pindahkan nama ke tabel Mahasiswa dengan NIM sebagai kunci.', 'Pindahkan nama ke tabel Mata Kuliah.', 'Tambahkan nama ke kunci gabungan.', 'Ganti kunci KRS dengan NIM saja.'], answer: 0, explanation: 'Nama bergantung pada NIM. Memindahkan nama ke tabel Mahasiswa menghilangkan ketergantungan parsial dari KRS.'},
   {id: 'BS-242', title: 'Routing Dinamis OSPF', course: 'Jaringan Komputer', status: 'revision', owner: 'A. Firmansyah', stem: 'OSPF menggunakan informasi keadaan tautan (link state) untuk menghitung rute.', options: ['Benar', 'Salah'], answer: 0, explanation: 'OSPF adalah protokol link-state.'},
@@ -17,7 +13,7 @@ const samples: Sample[] = [
   {id: 'BS-251', title: 'Transaksi Basis Data', course: 'Basis Data', status: 'approved', owner: 'N. Salsabila', stem: 'Sifat ACID mana yang memastikan seluruh transaksi berhasil atau seluruhnya dibatalkan?', options: ['Consistency', 'Atomicity', 'Isolation', 'Durability'], answer: 1, explanation: 'Atomicity menjaga transaksi tetap utuh sebagai satu kesatuan.'},
 ]
 
-export const seedQuestions: Question[] = samples.map((item, index) => ({
+export const seedQuestions = samples.map((item, index) => ({
   ...item,
   version: 1,
   revision: 1,
@@ -31,11 +27,11 @@ export const seedQuestions: Question[] = samples.map((item, index) => ({
   reviewNote: item.status === 'revision' ? 'Periksa kejelasan redaksi dan pembahasan sebelum mengajukan ulang.' : undefined,
 }))
 
-export const seedPackages: Array<PackageInput & {created: string}> = [
+export const seedPackages = [
   {id: 'PK-001', name: 'UTS Basis Data', course: 'Basis Data', questionIds: ['BS-251'], created: '2026-10-20T09:00:00'},
 ]
 
 const {title, course, level, format, stem, options, answer, explanation} = seedQuestions[1]
-export const draftExample: QuestionFields = {
+export const draftExample = {
   title, course, topic: 'Normalisasi basis data', level, format, stem, options, answer, explanation,
 }

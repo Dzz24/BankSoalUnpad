@@ -1,11 +1,12 @@
-export const courses = ['Basis Data', 'Struktur Data', 'Algoritma', 'Jaringan Komputer', 'Sistem Operasi', 'Keamanan TI', 'Kecerdasan Buatan'] as const
-export const levels = ['Mengingat', 'Memahami', 'Penerapan', 'Analisis'] as const
-export const formats = ['Pilihan Ganda', 'Benar/Salah'] as const
+import { serializeCsv } from '../shared/csv.js'
+import { courses, formats, levels, statusInfo } from '../shared/question-fields.js'
+
+export { courses, formats, levels, statusInfo }
 
 export type Course = (typeof courses)[number]
 export type Format = (typeof formats)[number]
 export type Level = (typeof levels)[number]
-export type Status = 'draft' | 'review' | 'approved' | 'revision' | 'rejected'
+export type Status = keyof typeof statusInfo
 export type Tone = 'blue' | 'amber' | 'green' | 'red' | 'purple' | 'gray'
 
 export type Question = {
@@ -28,14 +29,6 @@ export type Question = {
   updated: string
   priority: 'Tinggi' | 'Normal'
   reviewNote?: string
-}
-
-export const statusInfo: Record<Status, {label: string; tone: Tone}> = {
-  approved: {label: 'Disetujui', tone: 'green'},
-  review: {label: 'Menunggu Review', tone: 'amber'},
-  revision: {label: 'Perlu Revisi', tone: 'red'},
-  draft: {label: 'Draf', tone: 'purple'},
-  rejected: {label: 'Ditolak', tone: 'gray'},
 }
 
 export type QuestionFields = Pick<Question, 'title' | 'course' | 'topic' | 'level' | 'format' | 'stem' | 'options' | 'answer' | 'explanation'>
@@ -82,14 +75,6 @@ export const auditLabels = {
 
 export type AuditAction = keyof typeof auditLabels
 export type AuditEntry = {id: number; action: AuditAction; entityId: string; title: string; version: number | null; actor: string; created: string}
-
-export function serializeCsv(rows: Array<Array<string | number>>) {
-  return '\uFEFF' + rows.map((row) => row.map((value) => {
-    const text = String(value)
-    const safeText = typeof value === 'string' && /^[=+\-@\t\r\n]/.test(text.trimStart()) ? "'" + text : text
-    return '"' + safeText.replaceAll('"', '""') + '"'
-  }).join(',')).join('\r\n')
-}
 
 export function downloadFile(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob)
