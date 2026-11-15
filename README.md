@@ -1,5 +1,7 @@
 # Bank Soal Unpad
 
+Aplikasi web untuk mengelola bank soal Universitas Padjadjaran, mulai dari penyusunan dan peninjauan akademik hingga pelacakan versi soal dan penyusunan paket ujian.
+
 Prototipe Bank Soal responsif dengan React, TypeScript, Vite, Express, dan PostgreSQL. Struktur layar mengikuti mockup Figma Bank Soal, dengan header putih dan aksen kuning dari Portal Students Unpad.
 
 ## Menjalankan proyek
