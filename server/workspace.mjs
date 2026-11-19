@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { serializeCsv } from '../shared/csv.js'
 import { courses, statusInfo } from '../shared/question-fields.js'
 import { initializeDatabase, transaction } from './database.mjs'
@@ -103,22 +104,38 @@ export async function openWorkspace(pool) {
     throw error
   }
 
+  async function createQuestion(client, id, fields, status, note, account, metadata = {}) {
+    const question = {...fields, ...metadata, id, status, updated: now(), version: 1, revision: 1, owner: account.name, faculty: 'FMIPA', program: 'Informatika', priority: 'Normal'}
+    if (!(await insertQuestion(client, question))) {
+      const current = await requireQuestion(client, id)
+      if (sameFields(current, fields) && current.status === status) return current
+      throw new ApiError(409, 'ID soal sudah tersimpan. Muat ulang daftar soal sebelum menyimpan lagi.')
+    }
+    await addVersion(client, question, note || 'Versi awal.', account.username)
+    await record(client, account.username, 'question.created', question)
+    if (status === 'review') await record(client, account.username, 'review.submitted', question)
+    return question
+  }
+
+  async function saveGeneratedQuestions(items, account) {
+    const validated = items.map(({fields, suggestedMetadata}) => ({
+      fields: questionInput({...fields, status: 'draft'}).fields, suggestedMetadata,
+    }))
+    return transaction(pool, async (client) => {
+      const drafts = []
+      for (const {fields, suggestedMetadata} of validated) {
+        drafts.push(await createQuestion(client, `BS-${randomUUID().toUpperCase()}`, fields, 'draft', 'Draf dibuat melalui generator AI.', account, {source: 'ai', suggestedMetadata}))
+      }
+      return drafts
+    })
+  }
+
   async function saveQuestion(id, body, existing, account) {
     if (!existing) requestId(id, 'BS-')
     const {fields, status, note} = questionInput(body)
     return transaction(pool, async (client) => {
-      const updated = now()
       if (!existing) {
-        const question = {...fields, id, status, updated, version: 1, revision: 1, owner: account.name, faculty: 'FMIPA', program: 'Informatika', priority: 'Normal'}
-        if (!(await insertQuestion(client, question))) {
-          const current = await requireQuestion(client, id)
-          if (sameFields(current, fields) && current.status === status) return current
-          throw new ApiError(409, 'ID soal sudah tersimpan. Muat ulang daftar soal sebelum menyimpan lagi.')
-        }
-        await addVersion(client, question, note || 'Versi awal.', account.username)
-        await record(client, account.username, 'question.created', question)
-        if (status === 'review') await record(client, account.username, 'review.submitted', question)
-        return question
+        return createQuestion(client, id, fields, status, note, account)
       }
 
       const current = await requireQuestion(client, id, true)
@@ -220,7 +237,7 @@ export async function openWorkspace(pool) {
 
   return {
     list: () => transaction(pool, async (client) => ({questions: await listQuestions(client), packages: await listPackages(client)}), true),
-    saveQuestion, decide, history, savePackage, exportReport,
+    saveQuestion, saveGeneratedQuestions, decide, history, savePackage, exportReport,
     async audit() {
       const {rows} = await pool.query('SELECT id, action, entity_id AS "entityId", title, version, actor, created FROM audit_entries ORDER BY id DESC LIMIT 100')
       return rows

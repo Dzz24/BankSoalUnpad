@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react'
 import { getDraftExample } from './api'
 import { courses, formats, formatDate, levels, statusInfo, type Course, type Format, type Level, type Question, type QuestionFields, type QuestionInput, type ReviewStatus } from './data'
 import { QuestionHistoryPanel } from './History'
+import { QuestionGenerator } from './QuestionGenerator'
 import { Dialog, Empty, PageHeading, Pill, StatusPill } from './ui'
 
 const pageSize = 7
@@ -205,7 +206,10 @@ const editorValues = ({title, course, topic, level, format, stem, options, answe
   title, course, topic, level, format, stem, options, answer, explanation,
 })
 
-export function QuestionEditor({question, onSave}: {question?: Question; onSave: (input: QuestionInput, id: string, revision?: number) => Promise<void>}) {
+export function QuestionEditor({question, onSave, onGenerated, batchQuestions = []}: {
+  question?: Question; onSave: (input: QuestionInput, id: string, revision?: number) => Promise<void>
+  onGenerated: (drafts: Question[]) => void; batchQuestions?: Question[]
+}) {
   const [draft, setDraft] = useState<EditorValues>(() => question ? editorValues(question) : initialEditor)
   const [id] = useState(() => question?.id ?? `BS-${crypto.randomUUID().toUpperCase()}`)
   const [error, setError] = useState('')
@@ -213,6 +217,7 @@ export function QuestionEditor({question, onSave}: {question?: Question; onSave:
   const [pending, setPending] = useState(false)
   const [mode, setMode] = useState<'manual' | 'ai'>('manual')
   const [loadingExample, setLoadingExample] = useState(false)
+  const [generating, setGenerating] = useState(false)
 
   function change<K extends keyof EditorValues>(key: K, value: EditorValues[K]) {
     setDraft((previous) => ({...previous, [key]: value}))
@@ -234,7 +239,7 @@ export function QuestionEditor({question, onSave}: {question?: Question; onSave:
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (pending) return
+    if (pending || generating || mode === 'ai') return
     const status = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') === 'review' ? 'review' : 'draft'
     const options = draft.options.map((option) => option.trim())
     if (![draft.title, draft.topic, draft.stem].every((value) => value.trim()) || options.some((value) => !value)) {
@@ -263,16 +268,23 @@ export function QuestionEditor({question, onSave}: {question?: Question; onSave:
   return <>
     <a className="back-link" href="#/bank-soal"><ArrowLeft size={16} /> Kembali ke Bank Soal</a>
     <PageHeading title={question ? 'Edit Soal' : 'Buat Soal'} description="Lengkapi pertanyaan, pilihan jawaban, dan metadata soal." />
+    {batchQuestions.length > 0 && <section className="card generated-drafts" aria-label="Draf hasil AI">
+      <div><h2>{batchQuestions.length} Draf Hasil AI</h2><p className="muted">Pilih soal untuk memeriksa isi, kunci, dan pembahasannya.</p></div>
+      <nav aria-label="Pilih draf hasil AI">{batchQuestions.map((item, index) => <a key={item.id}
+        className={`button ${item.id === question?.id ? 'primary' : 'secondary'}`}
+        href={`#/buat-soal?id=${encodeURIComponent(item.id)}&batch=${encodeURIComponent(batchQuestions.map(({id}) => id).join(','))}`}
+        aria-current={item.id === question?.id ? 'page' : undefined}>Soal {index + 1}</a>)}</nav>
+    </section>}
     <div className="editor-layout">
       <form className="card editor-form" onSubmit={save} noValidate>
         <div className="segmented" aria-label="Cara membuat soal">
-          <button type="button" disabled={pending || loadingExample} aria-pressed={mode === 'manual'} onClick={() => {setMode('manual'); setError('')}}><BookOpen size={16} /> Editor Soal</button>
-          <button type="button" disabled={pending || loadingExample} aria-pressed={mode === 'ai'} onClick={() => {setMode('ai'); setError('')}}><Sparkles size={16} /> Bantuan AI</button>
+          <button type="button" disabled={pending || loadingExample || generating} aria-pressed={mode === 'manual'} onClick={() => {setMode('manual'); setError('')}}><BookOpen size={16} /> Editor Soal</button>
+          <button type="button" disabled={pending || loadingExample || generating} aria-pressed={mode === 'ai'} onClick={() => {setMode('ai'); setError('')}}><Sparkles size={16} /> Bantuan AI</button>
         </div>
         {mode === 'ai' ? <div className="inset ai-message">
-          <h3>Contoh Draf AI</h3><p>Muat satu soal contoh tentang normalisasi basis data untuk mencoba alur penyuntingan.</p>
+          <QuestionGenerator course={draft.course} topic={draft.topic} onGenerated={onGenerated} onPendingChange={setGenerating} />
           {error && <p className="form-error" role="alert">{error}</p>}
-          <button type="button" className="button secondary" disabled={loadingExample} onClick={() => void loadExample()}><Sparkles size={16} /> {loadingExample ? 'Memuat contoh…' : 'Muat Contoh ke Editor'}</button>
+          <button type="button" className="button ghost" disabled={loadingExample || generating} onClick={() => void loadExample()}>{loadingExample ? 'Memuat contoh…' : 'Muat Satu Contoh Statis'}</button>
         </div> : <>
           <div className="form-grid">
             <label className="field">Judul Soal<input value={draft.title} maxLength={180} onChange={(event) => change('title', event.target.value)} placeholder="Misalnya, Normalisasi Basis Data" required /></label>
@@ -297,6 +309,7 @@ export function QuestionEditor({question, onSave}: {question?: Question; onSave:
             })}
           </fieldset>
           <label className="field">Pembahasan<textarea rows={3} maxLength={8000} value={draft.explanation} onChange={(event) => change('explanation', event.target.value)} placeholder="Jelaskan alasan jawaban yang tepat" /></label>
+          {question?.source === 'ai' && <div className="inset"><p>Draf dibuat dengan bantuan AI. Periksa kebenaran isi dan kesesuaian level kognitif sebelum mengajukan review.</p>{question.suggestedMetadata && <p className="muted">Saran tag · {question.suggestedMetadata.tags.join(', ')}</p>}</div>}
           {question && <label className="field">Catatan Perubahan<textarea rows={2} maxLength={1000} value={changeNote} onChange={(event) => setChangeNote(event.target.value)} placeholder="Opsional, misalnya memperjelas redaksi pertanyaan" /></label>}
           {error && <p className="form-error" role="alert">{error}</p>}
           <div className="form-actions"><button type="submit" value="draft" className="button secondary" disabled={pending}>Simpan Draf</button><button type="submit" value="review" className="button primary" disabled={pending}><ClipboardCheck size={17} /> {pending ? 'Menyimpan…' : 'Ajukan Review'}</button></div>

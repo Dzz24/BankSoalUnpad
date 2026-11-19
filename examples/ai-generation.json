@@ -1,0 +1,55 @@
+{
+  "request": {
+    "material": "Normalisasi mengurangi redundansi data. Tabel memenuhi 1NF jika setiap sel berisi satu nilai atomik. Tabel memenuhi 2NF jika sudah 1NF dan setiap atribut nonkunci bergantung penuh pada seluruh kunci kandidat. Ketergantungan atribut nonkunci pada sebagian kunci gabungan disebut ketergantungan parsial. Contoh KRS memakai kunci (NIM, kode_mk) dengan atribut nama_mahasiswa, nama_mk, dan nilai. Nama mahasiswa bergantung pada NIM, nama mata kuliah pada kode_mk, sedangkan nilai bergantung pada gabungan NIM dan kode_mk. Pemecahannya menjadi Mahasiswa(NIM, nama_mahasiswa), MataKuliah(kode_mk, nama_mk), dan KRS(NIM, kode_mk, nilai).",
+    "topic": "Normalisasi basis data",
+    "count": 3,
+    "cognitiveLevel": "penerapan",
+    "course": "Basis Data"
+  },
+  "response": {
+    "questions": [
+      {
+        "stem": "Tabel KRS berkunci (NIM, kode_mk) memuat nama_mahasiswa yang hanya bergantung pada NIM. Perubahan apa yang menghilangkan ketergantungan parsial tersebut?",
+        "options": [
+          {"id": "A", "text": "Pindahkan nama_mahasiswa ke Mahasiswa dengan NIM sebagai kunci."},
+          {"id": "B", "text": "Pindahkan nama_mahasiswa ke MataKuliah dengan kode_mk sebagai kunci."},
+          {"id": "C", "text": "Tambahkan nama_mahasiswa ke dalam kunci gabungan KRS."},
+          {"id": "D", "text": "Hapus kode_mk dari kunci KRS tanpa memisahkan data."}
+        ],
+        "correctOptionId": "A",
+        "explanation": "Nama mahasiswa bergantung pada NIM saja. Pemindahan atribut ini ke Mahasiswa memisahkan ketergantungan pada sebagian kunci gabungan KRS.",
+        "topic": "Normalisasi basis data",
+        "cognitiveLevel": "penerapan",
+        "suggestedMetadata": {"title": "Menghilangkan ketergantungan nama mahasiswa", "tags": ["2NF", "ketergantungan parsial"]}
+      },
+      {
+        "stem": "Tabel KRS memiliki kunci gabungan (NIM, kode_mk). Nama mata kuliah hanya bergantung pada kode_mk. Di tabel manakah nama mata kuliah sebaiknya disimpan untuk memenuhi 2NF?",
+        "options": [
+          {"id": "A", "text": "Mahasiswa dengan NIM sebagai kunci."},
+          {"id": "B", "text": "MataKuliah dengan kode_mk sebagai kunci."},
+          {"id": "C", "text": "KRS dengan nama mata kuliah sebagai satu-satunya kunci."},
+          {"id": "D", "text": "KRS dengan kunci gabungan yang ditambah nama mata kuliah."}
+        ],
+        "correctOptionId": "B",
+        "explanation": "Nama mata kuliah bergantung pada kode_mk. Menempatkannya di MataKuliah menghilangkan ketergantungan pada sebagian kunci KRS.",
+        "topic": "Normalisasi basis data",
+        "cognitiveLevel": "penerapan",
+        "suggestedMetadata": {"title": "Memisahkan atribut mata kuliah", "tags": ["2NF", "dekomposisi"]}
+      },
+      {
+        "stem": "Sesudah data nama mahasiswa dan nama mata kuliah dipisahkan dari KRS, atribut manakah yang tepat tetap berada di KRS(NIM, kode_mk) berdasarkan ketergantungan penuhnya?",
+        "options": [
+          {"id": "A", "text": "Nama mahasiswa karena berlaku untuk seluruh mata kuliahnya."},
+          {"id": "B", "text": "Nama mata kuliah karena sama bagi semua pesertanya."},
+          {"id": "C", "text": "Nilai karena ditentukan oleh mahasiswa dan mata kuliah yang diambilnya."},
+          {"id": "D", "text": "Gabungan nama mahasiswa dan nama mata kuliah sebagai pengganti nilai."}
+        ],
+        "correctOptionId": "C",
+        "explanation": "Nilai bergantung pada pasangan NIM dan kode_mk. Mahasiswa dapat memperoleh nilai berbeda di setiap mata kuliah sehingga nilai tetap berada di KRS.",
+        "topic": "Normalisasi basis data",
+        "cognitiveLevel": "penerapan",
+        "suggestedMetadata": {"title": "Menempatkan atribut yang bergantung penuh", "tags": ["2NF", "ketergantungan penuh"]}
+      }
+    ]
+  }
+}

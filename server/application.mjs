@@ -2,7 +2,9 @@ import express from 'express'
 import { createAuth, requireSameOrigin } from './auth.mjs'
 import { createPool } from './database.mjs'
 import { draftExample } from './seed.mjs'
-import { ApiError, inputObject } from './validation.mjs'
+import { ApiError, choiceField, inputObject } from './validation.mjs'
+import { courses } from '../shared/question-fields.js'
+import { generateQuestions, generatedQuestionFields } from './generate-questions.mjs'
 import { openWorkspace } from './workspace.mjs'
 
 export async function createApplication({trustProxy = false} = {}) {
@@ -32,6 +34,15 @@ export async function createApplication({trustProxy = false} = {}) {
   api.use(express.json({limit: '128kb'}))
   api.get('/workspace', async (_request, response) => response.json(await workspace.list()))
   api.get('/questions/example', (_request, response) => response.json(draftExample))
+  api.post('/questions/generate', async (request, response) => {
+    const input = inputObject(request.body)
+    const course = choiceField(input.course, courses, 'Mata kuliah')
+    const result = await generateQuestions(input)
+    const drafts = await workspace.saveGeneratedQuestions(result.questions.map((question) => ({
+      fields: generatedQuestionFields(question, course), suggestedMetadata: question.suggestedMetadata,
+    })), response.locals.account)
+    response.status(201).json({...result, drafts})
+  })
   api.post('/questions', async (request, response) => {
     const body = inputObject(request.body)
     response.status(201).json(await workspace.saveQuestion(body.id, body, false, response.locals.account))
@@ -47,7 +58,7 @@ export async function createApplication({trustProxy = false} = {}) {
   })
   api.use((_request, response) => response.status(404).json({message: 'Endpoint API tidak ditemukan.'}))
   api.use((error, _request, response, _next) => {
-    if (error instanceof ApiError) return response.status(error.status).json({message: error.message})
+    if (error instanceof ApiError) return response.status(error.status).json({message: error.message, ...(error.code && {code: error.code})})
     if (error.type === 'entity.parse.failed') return response.status(400).json({message: 'Format JSON tidak valid.'})
     if (error.status === 413) return response.status(413).json({message: 'Ukuran permintaan terlalu besar.'})
     console.error(error)

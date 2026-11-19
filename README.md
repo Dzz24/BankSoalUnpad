@@ -57,7 +57,7 @@ Default sumbernya `storage/bank-soal.sqlite`. Gunakan `npm run db:migrate:sqlite
 ## Alur demo
 
 - **Bank Soal** mendukung pencarian, filter, detail, dan penyuntingan draf.
-- **Buat Soal** menyediakan editor manual dan satu contoh draf AI yang bisa dimuat ke editor.
+- **Buat Soal** menyediakan editor manual dan generator AI dari topik saja atau materi rujukan, dengan jumlah soal dan level C1–C6. Hasil yang valid disimpan sebagai draf dan dapat dibuka satu per satu di editor. Contoh statis juga tersedia untuk mencoba penyuntingan.
 - **Review Soal** mendukung persetujuan, permintaan revisi, dan penolakan. Catatan diperlukan untuk revisi dan penolakan.
 - **Riwayat Soal** menampilkan versi lama dan aktif, catatan perubahan, keputusan review per versi, dan paket ujian yang memuat soal.
 - **Paket Ujian** menautkan versi yang disetujui saat paket disimpan dan menampilkan cakupan topik serta level kognitif.
@@ -68,7 +68,15 @@ Default sumbernya `storage/bank-soal.sqlite`. Gunakan `npm run db:migrate:sqlite
 
 Soal, paket, riwayat versi, dan audit tersimpan di PostgreSQL. Pratinjau CSV, riwayat impor contoh, dan pengaturan profil tampilan masih berjalan di browser. Soal dan paket dari prototipe browser dapat diunduh sebagai JSON lewat **Pengaturan Sistem** pada browser yang menyimpannya.
 
-Backend memakai akun lokal. Sesi berlaku delapan jam dan dapat ditutup melalui **Profil Akun → Keluar**. Audit log mencatat nama pengguna dari sesi yang aktif. Backlog mencakup integrasi login Unpad dan hak akses per role, pengelolaan pengguna dan data master, pemrosesan impor CSV/XLSX di server, generasi AI, serta perhitungan CTT dan kalibrasi Rasch/IRT.
+Backend memakai akun lokal. Sesi berlaku delapan jam dan dapat ditutup melalui **Profil Akun → Keluar**. Audit log mencatat nama pengguna dari sesi yang aktif. Backlog mencakup integrasi login Unpad dan hak akses per role, pengelolaan pengguna dan data master, pemrosesan impor CSV/XLSX di server, serta perhitungan CTT dan kalibrasi Rasch/IRT.
+
+## Generator soal AI
+
+Pilih penyedia melalui `AI_PROVIDER` di `.env` untuk penggunaan lokal atau di environment backend Vercel untuk deployment. Untuk Gemini, isi `AI_PROVIDER=gemini`, `GEMINI_API_KEY`, dan `GEMINI_MODEL=gemini-4-hydrogen`. Untuk OpenAI, isi `AI_PROVIDER=openai`, `OPENAI_API_KEY`, dan `OPENAI_MODEL=gpt-4.1-mini`. Jika `AI_PROVIDER` kosong, aplikasi memakai OpenAI. Model Gemini dapat diganti dengan model yang mendukung Interactions API serta JSON Schema. Restart server setelah memperbarui `.env`, atau deploy ulang kode terbaru di Vercel setelah environment diperbarui. Kunci API digunakan oleh backend.
+
+Masuk ke **Buat Soal → Bantuan AI**. Pilihan awal **AI dari Topik** membuat soal dari pengetahuan model berdasarkan topik, mata kuliah, jumlah soal, dan level kognitif. Pilih **Dari Materi Rujukan** jika ingin soal berdasarkan materi yang kamu tempelkan. Klik **Buat Draf Soal**. Tiga soal yang diminta akan muncul sebagai tiga draf tersimpan dengan tombol **Soal 1**, **Soal 2**, dan **Soal 3** di atas editor. Simpan perubahan sebelum berpindah soal. Semua draf juga tersedia di Bank Soal setelah halaman dimuat ulang.
+
+Jalankan `npm run test:ai` untuk memeriksa kontrak keluaran dan penanganan kegagalan. [Kontrak integrasi dan panduan demo](docs/ai-generator.md) memuat pembagian file, contoh input-output, dan pemetaan untuk backend serta Risyam. [Contoh tiga soal](examples/ai-generation.json) merupakan fixture statis untuk integrasi dan pengujian.
 
 ## API
 
@@ -79,6 +87,7 @@ Backend memakai akun lokal. Sesi berlaku delapan jam dan dapat ditutup melalui *
 | POST | `/api/auth/logout` | Akhiri sesi aktif |
 | GET | `/api/workspace` | Daftar soal dan paket |
 | POST | `/api/questions` | Simpan soal baru sebagai draf atau ajukan review |
+| POST | `/api/questions/generate` | Buat 1–10 soal AI dan simpan seluruh hasil valid sebagai draf |
 | PUT | `/api/questions/:id` | Edit dan ajukan ulang soal menggunakan revisi data terakhir |
 | POST | `/api/questions/:id/review` | Simpan keputusan review menggunakan revisi data terakhir |
 | GET | `/api/questions/:id/history` | Versi soal, keputusan review, dan riwayat paket |

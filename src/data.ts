@@ -29,6 +29,8 @@ export type Question = {
   updated: string
   priority: 'Tinggi' | 'Normal'
   reviewNote?: string
+  source?: 'ai'
+  suggestedMetadata?: {title: string; tags: string[]}
 }
 
 export type QuestionFields = Pick<Question, 'title' | 'course' | 'topic' | 'level' | 'format' | 'stem' | 'options' | 'answer' | 'explanation'>
