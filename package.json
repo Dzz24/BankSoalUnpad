@@ -12,7 +12,9 @@
     "start": "node server/index.mjs",
     "preview": "npm run start",
     "db:migrate:sqlite": "node server/migrate-sqlite.mjs",
-    "auth:create-user": "node server/create-user.mjs"
+    "auth:create-user": "node server/create-user.mjs",
+    "test": "node --test",
+    "ctt:demo": "node scripts/ctt-demo.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
