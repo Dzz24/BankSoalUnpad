@@ -117,6 +117,31 @@ KR-20 = k/(k − 1) × (1 − Σpq ÷ σ²), dengan σ² variansi skor total ber
 
 Semua soal di data uji berstatus `indicative` (n = 10).
 
+## Penanda, interpretasi, dan rekomendasi
+
+Setiap soal mendapat `interpretation` (penjelasan bahasa sederhana) dan `recommendations` (saran pemeriksaan), sesuai BRD 2.1 dan bab 8. Hasil statistik hanya bahan pertimbangan dan tidak otomatis menghapus atau mengesahkan soal (RB-12-2).
+
+| Penanda | Muncul bila | Rekomendasi yang ditampilkan |
+|---|---|---|
+| `distractor-review` | Ada pengecoh yang belum berfungsi | Opsi tidak dipilih → ganti pengecoh; opsi lebih banyak dipilih kelompok atas → periksa kemiripan dengan jawaban benar; opsi jarang menarik kelompok bawah → buat lebih masuk akal |
+| `low-discrimination` | D < 0,25 | Tinjau redaksi dan pengecoh |
+| `key-check` | D < 0, **atau** ada opsi lain yang lebih banyak dipilih kelompok atas daripada kunci (point-biserial negatif dipakai bila D tidak dapat dihitung) | Periksa kunci jawaban; mungkin keliru atau ada lebih dari satu jawaban yang dapat dibenarkan |
+
+Kategori daya pembeda pada interpretasi: negatif (< 0), rendah (< 0,25), cukup (0,25–0,39), baik (≥ 0,40). Tambahan rekomendasi: p ≥ 0,90 (hampir selalu benar) dan p < 0,20 (sangat sedikit yang benar).
+
+Pada data uji tidak ada soal yang memicu `key-check`. Contoh kasusnya ada di `test/ctt.test.mjs` (blok "penanda kunci perlu dicek"): kunci K1 = A, tetapi 2 dari 3 peserta kelompok atas memilih B, sehingga D = 1/3 − 2/3 = −0,333.
+
+## Status "Sudah dianalisis"
+
+Field `analyzed` bernilai `true` hanya bila status kecukupan bukan `insufficient`. Backend dapat memakai field ini sebagai syarat status soal "Sudah dianalisis" (BRD 7.1, RB-06-2), sehingga soal dengan data kurang tidak dinyatakan sudah dianalisis secara empiris (ALT-12-1).
+
+## Ketelusuran, privasi, toleransi, dan kinerja
+
+- **Metadata metode** (`result.method`): nama metode, versi (`CTT_METHOD_VERSION`, saat ini 1.1.0), waktu hitung, dan seluruh parameter yang dipakai. Disimpan bersama hasil agar hasil lama tetap dapat dijelaskan walau parameter berubah (BR-07, FSD FR-12 langkah 4). Naikkan versi bila rumus atau aturan penanda diubah.
+- **Privasi**: daftar ID peserta kelompok atas/bawah tidak disertakan secara bawaan. Aktifkan `includeParticipantIds: true` hanya untuk pemeriksaan internal oleh analis (BRD 9.2).
+- **Toleransi numerik** (NFR-14): `CTT_TOLERANCE = 0,001`. Hasil dianggap sesuai acuan bila selisihnya di bawah nilai ini; test memakai toleransi yang sama.
+- **Kinerja** (NFR-03, ≤ 2 menit untuk 200 peserta × 100 soal): test "kinerja" menjalankan ukuran tersebut; pada uji lokal selesai dalam puluhan milidetik.
+
 ## Hal yang perlu disepakati dengan pakar assessment
 
 Semua dibuat sebagai parameter di `defaultCttOptions`, jadi bisa diubah tanpa mengubah rumus.
@@ -127,3 +152,6 @@ Semua dibuat sebagai parameter di `defaultCttOptions`, jadi bisa diubah tanpa me
 4. Kriteria pengecoh berfungsi (≥ 5% dan lebih banyak dipilih kelompok bawah).
 5. Batas kategori Mudah/Sedang/Sulit (bawaan mengikuti UI: 0,70 dan 0,40).
 6. Penanganan skor sama di batas kelompok atas/bawah (bawaan: diurutkan menurut ID peserta dan diberi catatan).
+7. Kategori daya pembeda dan aturan penanda `key-check` di atas.
+8. Toleransi numerik acuan (usulan 0,001).
+9. Apakah respons tidak valid diperlakukan sama dengan respons kosong (saat ini sama).

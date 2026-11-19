@@ -15,8 +15,10 @@
  *   adequateParticipants: number,
  *   distractorMinShare: number,
  *   lowDiscrimination: number,
+ *   goodDiscrimination: number,
  *   easyFrom: number,
  *   hardBelow: number,
+ *   includeParticipantIds: boolean,
  * }} CttOptions
  */
 
@@ -34,10 +36,20 @@ export const defaultCttOptions = Object.freeze({
   distractorMinShare: 0.05,
   // Penanda daya pembeda rendah (indeks D), sama dengan halaman Analisis Kualitas.
   lowDiscrimination: 0.25,
+  // Mulai batas ini daya pembeda disebut baik pada interpretasi.
+  goodDiscrimination: 0.4,
   // Batas kategori kesulitan, sama dengan halaman Analisis Kualitas.
   easyFrom: 0.7,
   hardBelow: 0.4,
+  // ID peserta kelompok atas/bawah hanya disertakan bila diminta (BRD 9.2: data peserta tidak dibuka tanpa perlu).
+  includeParticipantIds: false,
 })
+
+/** Versi metode perhitungan. Naikkan bila rumus atau aturan penanda berubah agar hasil lama tetap dapat ditelusuri. */
+export const CTT_METHOD_VERSION = '1.1.0'
+
+/** Toleransi numerik untuk mencocokkan hasil dengan hitungan acuan (NFR-14). */
+export const CTT_TOLERANCE = 0.001
 
 const TRUE_FALSE_FORMAT = 'Benar/Salah'
 
@@ -149,11 +161,14 @@ export function analyzeCtt({responses, items, options = {}}) {
 
   const itemResults = itemList.map((item) => analyzeItem(item, participants, matrix, totals, upper, lower, settings))
 
+  const groups = {size: groupSize, notes: groupNotes}
+  if (settings.includeParticipantIds) Object.assign(groups, {upper: [...upper], lower: [...lower]})
+
   return {
-    settings,
+    method: {name: 'CTT', version: CTT_METHOD_VERSION, computedAt: new Date().toISOString(), settings},
     participantCount,
     itemCount: itemList.length,
-    groups: {size: groupSize, upper: [...upper], lower: [...lower], notes: groupNotes},
+    groups,
     items: itemResults,
     test: summarizeTest(itemResults, participants, matrix, totals, itemList, settings),
     issues,
@@ -210,12 +225,20 @@ function analyzeItem(item, participants, matrix, totals, upper, lower, settings)
     distractorCount: item.trueFalse ? 0 : item.labels.length - 1,
     effectiveDistractors: null,
     flags: [],
+    analyzed: false,
+    interpretation: [],
+    recommendations: [],
     notes,
   }
   if (item.trueFalse) notes.push('Analisis pengecoh tidak berlaku untuk soal dua opsi.')
   if (distribution.invalid.count) notes.push(`${distribution.invalid.count} respons tidak sesuai opsi soal.`)
   if (distribution.blank.count + distribution.missing.count) notes.push(`${distribution.blank.count + distribution.missing.count} respons kosong (${settings.blank === 'incorrect' ? 'dihitung salah' : 'tidak dihitung'}).`)
-  if (sufficiency === 'insufficient') return result
+  if (sufficiency === 'insufficient') {
+    result.interpretation.push(`Data belum cukup: baru ${n} respons yang dihitung, jadi kualitas soal belum bisa dinilai.`)
+    result.recommendations.push('Tunggu data dari ujian berikutnya atau gabungkan dengan kelas lain sebelum menilai soal ini.')
+    return result
+  }
+  result.analyzed = true
 
   const scores = counted.map((participantId) => cell(participantId).score)
   const correct = scores.reduce((sum, score) => sum + score, 0)
@@ -253,7 +276,54 @@ function analyzeItem(item, participants, matrix, totals, upper, lower, settings)
     if (result.effectiveDistractors < result.distractorCount) result.flags.push('distractor-review')
   }
   if (result.discrimination !== null && result.discrimination < settings.lowDiscrimination) result.flags.push('low-discrimination')
+
+  // Indikasi kunci keliru: kelompok bawah lebih sering benar, atau ada opsi lain yang lebih menarik bagi kelompok atas daripada kunci.
+  const keyUpper = distribution[item.answer].upper
+  const rivals = item.labels.filter((label) => label !== item.answer && distribution[label].upper > keyUpper)
+  // Indeks D menjadi acuan utama; point-biserial dipakai bila D tidak dapat dihitung.
+  const negative = result.discrimination !== null ? result.discrimination < 0 : result.pointBiserial !== null && result.pointBiserial < 0
+  if (negative || rivals.length) result.flags.push('key-check')
+
+  describeItem(result, item, rivals, negative, settings)
   return result
+}
+
+const percent = (value) => Math.round(value * 100)
+const decimal = (value) => value.toFixed(2).replace('.', ',')
+
+/** Menyusun interpretasi dan rekomendasi dalam bahasa sederhana (BRD 2.1 dan bab 8). */
+function describeItem(result, item, rivals, negative, settings) {
+  const {interpretation, recommendations} = result
+  const band = {Mudah: 'mudah', Sedang: 'sedang', Sulit: 'sulit'}[result.difficultyBand]
+  interpretation.push(`Soal tergolong ${band}: ${percent(result.difficulty)}% peserta menjawab benar.`)
+  if (result.difficultyBand === 'Mudah' && result.difficulty >= 0.9) recommendations.push('Soal hampir selalu dijawab benar; pertimbangkan apakah masih perlu dipakai untuk membedakan peserta.')
+  if (result.difficultyBand === 'Sulit' && result.difficulty < 0.2) recommendations.push('Sangat sedikit peserta yang benar; periksa redaksi soal, kunci, dan kesesuaian dengan materi yang diajarkan.')
+
+  const d = result.discrimination
+  if (d !== null) {
+    if (d < 0) interpretation.push(`Daya pembeda negatif (${decimal(d)}): kelompok bawah justru lebih sering benar daripada kelompok atas.`)
+    else if (d < settings.lowDiscrimination) interpretation.push(`Daya pembeda rendah (${decimal(d)}): soal kurang mampu membedakan peserta yang menguasai materi dari yang belum.`)
+    else if (d < settings.goodDiscrimination) interpretation.push(`Daya pembeda cukup (${decimal(d)}): kelompok atas lebih sering benar daripada kelompok bawah.`)
+    else interpretation.push(`Daya pembeda baik (${decimal(d)}): kelompok atas jauh lebih sering benar daripada kelompok bawah.`)
+    if (d >= 0 && d < settings.lowDiscrimination) recommendations.push('Tinjau kejelasan redaksi dan pengecoh agar soal lebih membedakan peserta.')
+  }
+
+  if (negative || rivals.length) {
+    const reason = rivals.length ? `opsi ${rivals.join(', ')} lebih banyak dipilih kelompok atas daripada kunci ${item.answer}` : 'daya pembedanya negatif'
+    recommendations.push(`Periksa kunci jawaban: ${reason}. Bisa jadi kuncinya keliru atau ada lebih dari satu jawaban yang dapat dibenarkan.`)
+  }
+
+  if (result.distractors) {
+    const unused = result.distractors.filter((distractor) => distractor.count === 0).map((distractor) => distractor.option)
+    const rare = result.distractors.filter((distractor) => distractor.count > 0 && !distractor.effective && distractor.upper > distractor.lower && !rivals.includes(distractor.option)).map((distractor) => distractor.option)
+    const weak = result.distractors.filter((distractor) => distractor.count > 0 && !distractor.effective && distractor.upper <= distractor.lower).map((distractor) => distractor.option)
+    interpretation.push(`${result.effectiveDistractors} dari ${result.distractorCount} pengecoh berfungsi.`)
+    if (unused.length) recommendations.push(`Opsi ${unused.join(', ')} tidak dipilih siapa pun; pertimbangkan mengganti pengecoh ini.`)
+    if (rare.length) recommendations.push(`Opsi ${rare.join(', ')} lebih banyak dipilih kelompok atas daripada kelompok bawah; periksa apakah opsi ini terlalu mirip jawaban benar.`)
+    if (weak.length) recommendations.push(`Opsi ${weak.join(', ')} jarang menarik peserta kelompok bawah; pertimbangkan membuatnya lebih masuk akal.`)
+  }
+
+  if (!recommendations.length) recommendations.push('Tidak ada masalah yang menonjol; soal dapat dipertahankan.')
 }
 
 function summarizeTest(itemResults, participants, matrix, totals, itemList, settings) {
