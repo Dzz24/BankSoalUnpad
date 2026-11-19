@@ -1,15 +1,17 @@
-import { courses, seedPackages, seedQuestions, serializeCsv, statusInfo } from '../src/data.ts'
-import { createPool, initializeDatabase, transaction } from './database.mjs'
+import { randomUUID } from 'node:crypto'
+import { serializeCsv } from '../shared/csv.js'
+import { courses, statusInfo } from '../shared/question-fields.js'
+import { initializeDatabase, transaction } from './database.mjs'
+import { seedPackages, seedQuestions } from './seed.mjs'
 import { ApiError, checkRevision, choiceField, inputObject, questionInput, requestId, stringField } from './validation.mjs'
 
-const actor = 'Admin Demo'
 const editableStatuses = ['draft', 'revision']
 const decisions = {approved: 'review.approved', revision: 'review.revision_requested', rejected: 'review.rejected'}
 const decisionStatus = Object.fromEntries(Object.entries(decisions).map(([status, action]) => [action, status]))
 const now = () => new Date().toISOString()
 const sameFields = (question, fields) => Object.keys(fields).every((key) => JSON.stringify(fields[key]) === JSON.stringify(question[key]))
 
-async function record(client, action, {id, title, version = null, updated}, note = '') {
+async function record(client, actor, action, {id, title, version = null, updated}, note = '') {
   await client.query(
     'INSERT INTO audit_entries (action, entity_id, title, version, actor, created, note) VALUES ($1, $2, $3, $4, $5, $6, $7)',
     [action, id, title, version, actor, updated, note],
@@ -94,8 +96,7 @@ async function seed(client) {
   }
 }
 
-export async function openWorkspace() {
-  const pool = createPool()
+export async function openWorkspace(pool) {
   try {
     await initializeDatabase(pool, 'demo', seed)
   } catch (error) {
@@ -103,22 +104,38 @@ export async function openWorkspace() {
     throw error
   }
 
-  async function saveQuestion(id, body, existing) {
+  async function createQuestion(client, id, fields, status, note, account, metadata = {}) {
+    const question = {...fields, ...metadata, id, status, updated: now(), version: 1, revision: 1, owner: account.name, faculty: 'FMIPA', program: 'Informatika', priority: 'Normal'}
+    if (!(await insertQuestion(client, question))) {
+      const current = await requireQuestion(client, id)
+      if (sameFields(current, fields) && current.status === status) return current
+      throw new ApiError(409, 'ID soal sudah tersimpan. Muat ulang daftar soal sebelum menyimpan lagi.')
+    }
+    await addVersion(client, question, note || 'Versi awal.', account.username)
+    await record(client, account.username, 'question.created', question)
+    if (status === 'review') await record(client, account.username, 'review.submitted', question)
+    return question
+  }
+
+  async function saveGeneratedQuestions(items, account) {
+    const validated = items.map(({fields, suggestedMetadata}) => ({
+      fields: questionInput({...fields, status: 'draft'}).fields, suggestedMetadata,
+    }))
+    return transaction(pool, async (client) => {
+      const drafts = []
+      for (const {fields, suggestedMetadata} of validated) {
+        drafts.push(await createQuestion(client, `BS-${randomUUID().toUpperCase()}`, fields, 'draft', 'Draf dibuat melalui generator AI.', account, {source: 'ai', suggestedMetadata}))
+      }
+      return drafts
+    })
+  }
+
+  async function saveQuestion(id, body, existing, account) {
     if (!existing) requestId(id, 'BS-')
     const {fields, status, note} = questionInput(body)
     return transaction(pool, async (client) => {
-      const updated = now()
       if (!existing) {
-        const question = {...fields, id, status, updated, version: 1, revision: 1, owner: actor, faculty: 'FMIPA', program: 'Informatika', priority: 'Normal'}
-        if (!(await insertQuestion(client, question))) {
-          const current = await requireQuestion(client, id)
-          if (sameFields(current, fields) && current.status === status) return current
-          throw new ApiError(409, 'ID soal sudah tersimpan. Muat ulang daftar soal sebelum menyimpan lagi.')
-        }
-        await addVersion(client, question, note || 'Versi awal.', actor)
-        await record(client, 'question.created', question)
-        if (status === 'review') await record(client, 'review.submitted', question)
-        return question
+        return createQuestion(client, id, fields, status, note, account)
       }
 
       const current = await requireQuestion(client, id, true)
@@ -132,14 +149,14 @@ export async function openWorkspace() {
         ...current, ...fields, status, updated: now(), version: current.version + Number(contentChanged), revision: current.revision + 1,
       }
       await updateQuestion(client, question)
-      if (contentChanged) await addVersion(client, question, note || 'Isi atau metadata soal diperbarui.', actor)
-      if (contentChanged || status === 'draft') await record(client, 'question.updated', question)
-      if (status === 'review') await record(client, 'review.submitted', question)
+      if (contentChanged) await addVersion(client, question, note || 'Isi atau metadata soal diperbarui.', account.username)
+      if (contentChanged || status === 'draft') await record(client, account.username, 'question.updated', question)
+      if (status === 'review') await record(client, account.username, 'review.submitted', question)
       return question
     })
   }
 
-  async function decide(id, body) {
+  async function decide(id, body, account) {
     const data = inputObject(body)
     const status = choiceField(data.status, Object.keys(decisions), 'Keputusan review')
     const note = stringField(data.note ?? '', 'Catatan review', 2_000, status !== 'approved')
@@ -149,7 +166,7 @@ export async function openWorkspace() {
       if (current.status !== 'review') throw new ApiError(409, 'Soal ini sudah keluar dari antrean review.')
       const question = {...current, status, reviewNote: note || undefined, revision: current.revision + 1, updated: now()}
       await updateQuestion(client, question)
-      await record(client, decisions[status], question, note)
+      await record(client, account.username, decisions[status], question, note)
       return question
     })
   }
@@ -173,7 +190,7 @@ export async function openWorkspace() {
     }, true)
   }
 
-  async function savePackage(body) {
+  async function savePackage(body, account) {
     const data = inputObject(body)
     const id = requestId(data.id, 'PK-')
     const name = stringField(data.name, 'Nama paket', 180)
@@ -200,13 +217,13 @@ export async function openWorkspace() {
       }
 
       await insertPackageItems(client, id, questions)
-      await record(client, 'package.created', {id, title: name, updated: created})
+      await record(client, account.username, 'package.created', {id, title: name, updated: created})
       const [item] = await listPackages(client, id)
       return item
     })
   }
 
-  async function exportReport(body) {
+  async function exportReport(body, account) {
     const data = inputObject(body)
     const course = choiceField(data.course, ['', ...courses], 'Mata kuliah')
     const questions = (await listQuestions(pool)).filter((question) => !course || question.course === course)
@@ -214,13 +231,13 @@ export async function openWorkspace() {
       ['id_soal', 'versi', 'judul', 'mata_kuliah', 'status'],
       ...questions.map((question) => [question.id, question.version, question.title, question.course, statusInfo[question.status].label]),
     ])
-    await record(pool, 'report.exported', {id: 'laporan-bank-soal', title: course || 'Semua mata kuliah', updated: now()})
+    await record(pool, account.username, 'report.exported', {id: 'laporan-bank-soal', title: course || 'Semua mata kuliah', updated: now()})
     return csv
   }
 
   return {
     list: () => transaction(pool, async (client) => ({questions: await listQuestions(client), packages: await listPackages(client)}), true),
-    saveQuestion, decide, history, savePackage, exportReport,
+    saveQuestion, saveGeneratedQuestions, decide, history, savePackage, exportReport,
     async audit() {
       const {rows} = await pool.query('SELECT id, action, entity_id AS "entityId", title, version, actor, created FROM audit_entries ORDER BY id DESC LIMIT 100')
       return rows

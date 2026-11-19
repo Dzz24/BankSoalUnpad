@@ -1,9 +1,10 @@
 import '@fontsource-variable/inter'
-import { BarChart3, Bell, BookOpen, ChevronDown, ClipboardCheck, ClipboardList, FileBarChart2, History, LayoutDashboard, Menu, Search, Settings as SettingsIcon, Upload, X, type LucideIcon } from 'lucide-react'
+import { BarChart3, Bell, BookOpen, ChevronDown, ClipboardCheck, ClipboardList, FileBarChart2, History, LayoutDashboard, LogOut, Menu, Search, Settings as SettingsIcon, Upload, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Analysis } from './Analysis'
-import { getWorkspace, reviewQuestion, savePackage, saveQuestion, type Workspace } from './api'
+import { getWorkspace, reviewQuestion, savePackage, saveQuestion, type AuthUser, type Workspace } from './api'
+import { AuthGate } from './Auth'
 import { Dashboard } from './Dashboard'
 import { AuditLog } from './History'
 import { QuestionBank, QuestionDialog, QuestionEditor, Review } from './Questions'
@@ -22,7 +23,6 @@ const navigation: Array<{path: string; title: string; icon: LucideIcon}> = [
   {path: 'laporan', title: 'Laporan', icon: FileBarChart2},
 ]
 
-const defaultProfile: Profile = {name: 'Risyam Admin', faculty: 'FMIPA'}
 const getLocation = () => window.location.hash.slice(1).replace(/^\//, '') || 'dashboard'
 
 function useLocalState<T,>(key: string, fallback: T) {
@@ -68,18 +68,20 @@ function SearchDialog({questions, onClose, onOpen}: {questions: Question[]; onCl
   </Dialog>
 }
 
-function App() {
+function App({user, onSignOut}: {user: AuthUser; onSignOut: () => Promise<void>}) {
   const [location, setLocation] = useState(getLocation)
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [loadError, setLoadError] = useState('')
   const [loadAttempt, setLoadAttempt] = useState(0)
   const questions = workspace?.questions ?? []
   const [imports, setImports] = useLocalState('imports', seedImports)
-  const [profile, setProfile] = useLocalState('profile', defaultProfile)
+  const [profile, setProfile] = useLocalState<Profile>('profile:' + user.username, {name: user.name, faculty: 'FMIPA'})
   const [overlay, setOverlay] = useState<'search' | 'notifications' | 'profile' | null>(null)
   const [detail, setDetail] = useState<{id: string; review: boolean} | null>(null)
   const [mobileNav, setMobileNav] = useState(false)
   const [toast, setToast] = useState('')
+  const [signingOut, setSigningOut] = useState(false)
+  const [signOutError, setSignOutError] = useState('')
   const [path, query = ''] = location.split('?')
   const params = new URLSearchParams(query)
   const known = navigation.find((item) => item.path === path)
@@ -154,7 +156,14 @@ function App() {
     const question = await saveQuestion(id, input, revision)
     applyQuestion(question)
     setToast(question.status === 'review' ? 'Soal diajukan untuk review.' : 'Draf soal disimpan.')
+    if (params.has('batch') && question.status === 'draft') return
     window.location.hash = '/bank-soal'
+  }
+
+  function acceptGeneratedQuestions(drafts: Question[]) {
+    setWorkspace((previous) => previous && ({...previous, questions: [...drafts, ...previous.questions]}))
+    setToast(`${drafts.length} draf AI disimpan. Periksa setiap soal sebelum mengajukan review.`)
+    window.location.hash = '/buat-soal?' + new URLSearchParams({id: drafts[0].id, batch: drafts.map(({id}) => id).join(',')})
   }
 
   async function decide(question: Question, status: ReviewStatus, note: string) {
@@ -178,6 +187,19 @@ function App() {
     setToast('Riwayat impor disimpan.')
   }
 
+  async function signOut() {
+    if (signingOut) return
+    setSignOutError('')
+    setSigningOut(true)
+    try {
+      await onSignOut()
+    } catch (error) {
+      setSignOutError(error instanceof Error ? error.message : 'Gagal keluar. Coba lagi.')
+    } finally {
+      setSigningOut(false)
+    }
+  }
+
   return <div className="app">
     <header className="topbar">
       <div className="topbar-brand">
@@ -190,7 +212,7 @@ function App() {
       <div className="topbar-actions">
         <button type="button" className="global-search" onClick={() => setOverlay('search')} aria-label="Buka pencarian soal"><Search size={17} /><span>Cari soal</span><kbd>Ctrl K</kbd></button>
         <button type="button" className="icon-button notification-button" aria-label={`Pemberitahuan, ${reviewQueue.length} soal menunggu review`} onClick={() => setOverlay('notifications')}><Bell size={20} />{reviewQueue.length > 0 && <span className="notification-dot" />}</button>
-        <button type="button" className="profile" aria-label="Buka profil admin" onClick={() => setOverlay('profile')}><span className="avatar">{initials}</span><span className="profile-copy"><strong>{profile.name}</strong><small>Admin Fakultas</small></span><ChevronDown size={16} className="profile-chevron" /></button>
+        <button type="button" className="profile" aria-label="Buka profil akun" onClick={() => {setSignOutError(''); setOverlay('profile')}}><span className="avatar">{initials}</span><span className="profile-copy"><strong>{profile.name}</strong><small>@{user.username}</small></span><ChevronDown size={16} className="profile-chevron" /></button>
       </div>
     </header>
 
@@ -220,7 +242,8 @@ function App() {
       {page === 'review-soal' && <Review questions={questions} onOpen={openQuestion} />}
       {page === 'buat-soal' && (editingId && !editing
         ? <Empty title="Soal tidak tersedia untuk diedit" description="Pilih soal berstatus draf atau perlu revisi." action={<a className="button secondary" href="#/bank-soal">Kembali ke Bank Soal</a>} />
-        : <QuestionEditor question={editing} onSave={submitQuestion} />)}
+        : <QuestionEditor question={editing} onSave={submitQuestion} onGenerated={acceptGeneratedQuestions}
+          batchQuestions={(params.get('batch') ?? '').split(',').map((id) => questions.find((item) => item.id === id && ['draft', 'revision'].includes(item.status))).filter((item): item is Question => Boolean(item))} />)}
       {page === 'analisis-kualitas' && <Analysis />}
       {page === 'paket-ujian' && <Packages packages={workspace.packages} questions={questions} initialOpen={params.has('baru')} onAdd={addPackage} />}
       {page === 'hasil-ujian' && <Results imports={imports} initialOpen={params.has('impor')} onAdd={addImport} />}
@@ -239,13 +262,20 @@ function App() {
       </div>
       <footer className="dialog-footer"><a className="button primary" href="#/review-soal" onClick={() => setOverlay(null)}>Buka Review Soal</a></footer>
     </Dialog>}
-    {overlay === 'profile' && <Dialog title="Profil Admin" onClose={() => setOverlay(null)}>
-      <div className="dialog-content profile-detail"><span className="avatar">{initials}</span><div><h3>{profile.name}</h3><p className="muted">Admin Fakultas · {profile.faculty}</p></div></div>
-      <footer className="dialog-footer"><a className="button secondary" href="#/pengaturan" onClick={() => setOverlay(null)}><SettingsIcon size={17} /> Pengaturan Profil</a></footer>
+    {overlay === 'profile' && <Dialog title="Profil Akun" onClose={() => setOverlay(null)}>
+      <div className="dialog-content profile-detail"><span className="avatar">{initials}</span><div><h3>{profile.name}</h3><p className="muted">@{user.username} · {profile.faculty}</p></div>
+        {signOutError && <p className="form-error sign-out-error" role="alert">{signOutError}</p>}
+      </div>
+      <footer className="dialog-footer">
+        <a className="button secondary" href="#/pengaturan" onClick={() => setOverlay(null)}><SettingsIcon size={17} /> Pengaturan Profil</a>
+        <button type="button" className="button danger" disabled={signingOut} onClick={() => void signOut()}><LogOut size={17} /> {signingOut ? 'Sedang keluar…' : 'Keluar'}</button>
+      </footer>
     </Dialog>}
     {currentDetail && detail && <QuestionDialog key={currentDetail.id} question={currentDetail} review={detail.review} onClose={() => setDetail(null)} onDecision={decide} />}
     <div className="toast-area" aria-live="polite">{toast && <div className="toast"><span>{toast}</span><button type="button" aria-label="Tutup pesan" onClick={() => setToast('')}><X size={17} /></button></div>}</div>
   </div>
 }
 
-createRoot(document.getElementById('root')!).render(<App />)
+createRoot(document.getElementById('root')!).render(
+  <AuthGate>{(user, signOut) => <App key={user.username} user={user} onSignOut={signOut} />}</AuthGate>,
+)

@@ -49,3 +49,18 @@ CREATE TABLE IF NOT EXISTS audit_entries (
 );
 
 CREATE INDEX IF NOT EXISTS audit_entity ON audit_entries(entity_id);
+
+CREATE TABLE IF NOT EXISTS auth_users (
+  username text PRIMARY KEY CHECK (username ~ '^[a-z0-9][a-z0-9._-]{2,39}$'),
+  display_name text NOT NULL,
+  password_salt bytea NOT NULL CHECK (octet_length(password_salt) = 16),
+  password_hash bytea NOT NULL CHECK (octet_length(password_hash) = 64)
+);
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  token_hash bytea PRIMARY KEY CHECK (octet_length(token_hash) = 32),
+  username text NOT NULL REFERENCES auth_users(username) ON DELETE CASCADE,
+  expires_at timestamptz NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS auth_sessions_expiration ON auth_sessions(expires_at);

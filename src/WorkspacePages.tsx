@@ -220,7 +220,7 @@ export function Settings({profile, onSave}: {profile: Profile; onSave: (profile:
   })
 
   return <>
-    <PageHeading title="Pengaturan Sistem" description="Atur profil tampilan di perangkat ini. Aktivitas server dicatat sebagai Admin Demo." />
+    <PageHeading title="Pengaturan Sistem" description="Atur profil tampilan di perangkat ini. Audit log mencatat nama pengguna akun." />
     <form className="card editor-form settings-form" onSubmit={(event) => {
       event.preventDefault()
       if (!name.trim() || !faculty.trim()) {
@@ -230,7 +230,7 @@ export function Settings({profile, onSave}: {profile: Profile; onSave: (profile:
       setError('')
       onSave({name: name.trim(), faculty: faculty.trim()})
     }}>
-      <h2>Profil Admin</h2>
+      <h2>Profil Akun</h2>
       <label className="field">Nama Tampilan<input value={name} onChange={(event) => setName(event.target.value)} required maxLength={60} /></label>
       <label className="field">Fakultas<input value={faculty} onChange={(event) => setFaculty(event.target.value)} required maxLength={45} /></label>
       {error && <p className="form-error" role="alert">{error}</p>}
