@@ -238,7 +238,7 @@ function App({user, onSignOut}: {user: AuthUser; onSignOut: () => Promise<void>}
         : <QuestionEditor question={editing} onSave={submitQuestion} />)}
       {page === 'analisis-kualitas' && <Analysis />}
       {page === 'paket-ujian' && <Packages packages={workspace.packages} questions={questions} initialOpen={params.has('baru')} onAdd={addPackage} />}
-      {page === 'hasil-ujian' && <Results imports={imports} initialOpen={params.has('impor')} onAdd={addImport} />}
+      {page === 'hasil-ujian' && <Results imports={imports} questions={questions} initialOpen={params.has('impor')} onAdd={addImport} />}
       {page === 'laporan' && <Reports questions={questions} />}
       {page === 'pengaturan' && <Settings profile={profile} onSave={(next) => {setProfile(next); setToast('Pengaturan disimpan.')}} />}
       {page === 'audit-log' && <AuditLog />}

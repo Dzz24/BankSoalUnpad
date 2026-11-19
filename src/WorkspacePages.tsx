@@ -2,6 +2,7 @@ import { Check, Download, FileSpreadsheet, Plus, Search, Upload } from 'lucide-r
 import Papa from 'papaparse'
 import { useRef, useState, type FormEvent } from 'react'
 import { exportQuestionReport } from './api'
+import { CttPreview, type ResponseRow } from './CttPreview'
 import { courses, downloadCsv, downloadFile, formatDate, statusInfo, type Course, type ExamImport, type ExamPackage, type PackageInput, type Profile, type Question } from './data'
 import { Dialog, Empty, PageHeading, Pill } from './ui'
 
@@ -84,11 +85,10 @@ export function Packages({packages, questions, initialOpen, onAdd}: {packages: E
 }
 
 const csvColumns = ['id_peserta', 'id_soal', 'versi_soal', 'respons'] as const
-type ResponseRow = Record<(typeof csvColumns)[number], string>
 
-export function Results({imports, initialOpen, onAdd}: {imports: ExamImport[]; initialOpen: boolean; onAdd: (item: ExamImport) => void}) {
+export function Results({imports, questions, initialOpen, onAdd}: {imports: ExamImport[]; questions: Question[]; initialOpen: boolean; onAdd: (item: ExamImport) => void}) {
   const [open, setOpen] = useState(initialOpen)
-  const [preview, setPreview] = useState<{name: string; total: number; rows: ResponseRow[]} | null>(null)
+  const [preview, setPreview] = useState<{id: number; name: string; total: number; rows: ResponseRow[]; allRows: ResponseRow[]} | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const readId = useRef(0)
@@ -125,7 +125,7 @@ export function Results({imports, initialOpen, onAdd}: {imports: ExamImport[]; i
         if (keys.has(key)) throw new Error(`Ditemukan respons duplikat pada baris ${index + 2}.`)
         keys.add(key)
       }
-      setPreview({name: file.name, total: parsed.data.length, rows: parsed.data.slice(0, 4)})
+      setPreview({id, name: file.name, total: parsed.data.length, rows: parsed.data.slice(0, 4), allRows: parsed.data})
     } catch (error) {
       if (id === readId.current) setError(error instanceof Error ? error.message : 'File gagal dibaca.')
     } finally {
@@ -155,7 +155,8 @@ export function Results({imports, initialOpen, onAdd}: {imports: ExamImport[]; i
             <thead><tr><th>Peserta</th><th>Soal</th><th>Versi</th><th>Respons</th></tr></thead>
             <tbody>{preview.rows.map((row, index) => <tr key={index}><td>{row.id_peserta}</td><td>{row.id_soal}</td><td>{row.versi_soal}</td><td>{row.respons || 'Kosong'}</td></tr>)}</tbody>
           </table></div>
-          <p className="muted">Prototipe mencatat nama file dan jumlah baris. Analisis menggunakan data contoh.</p>
+          <p className="muted">Riwayat impor hanya mencatat nama file dan jumlah baris. Pratinjau CTT di bawah dihitung di browser dan belum disimpan.</p>
+          <CttPreview key={preview.id} rows={preview.allRows} questions={questions} />
         </>}
       </div>
       <footer className="dialog-footer">

@@ -621,3 +621,17 @@ legend { padding: 0; font-weight: 670; font-size: 13px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: .001ms !important; scroll-behavior: auto !important; }
 }
+
+.ctt-preview { display: grid; gap: 11px; border-top: 1px solid #e7edf5; padding-top: 13px; }
+.ctt-preview-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.ctt-preview tbody td small { display: block; margin-top: 3px; color: var(--muted); font-size: 10.5px; }
+.ctt-details { display: grid; gap: 6px; }
+.ctt-details details { border: 1px solid #e7edf5; border-radius: 9px; padding: 9px 12px; }
+.ctt-details summary { cursor: pointer; font-size: 13px; }
+.ctt-details ul { margin: 7px 0 0; padding-left: 18px; display: grid; gap: 3px; font-size: 12.5px; }
+.ctt-details p { margin-top: 7px; font-size: 12.5px; }
+.ctt-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 14px; }
+.ctt-controls .field { min-width: 200px; }
+.ctt-priority-summary { display: flex; flex-wrap: wrap; gap: 6px; }
+.ctt-preview tr.ctt-changed > * { background: #fff8e1; }
+.ctt-preview .ctt-changed-note { color: #8a5a00 !important; font-weight: 650; }
