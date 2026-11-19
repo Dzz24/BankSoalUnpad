@@ -15,9 +15,13 @@
  *   adequateParticipants: number,
  *   distractorMinShare: number,
  *   lowDiscrimination: number,
+ *   marginalDiscrimination: number,
  *   goodDiscrimination: number,
- *   easyFrom: number,
- *   hardBelow: number,
+ *   easyAbove: number,
+ *   hardMax: number,
+ *   veryEasyFrom: number,
+ *   veryHardMax: number,
+ *   blankWarningShare: number,
  *   includeParticipantIds: boolean,
  * }} CttOptions
  */
@@ -34,19 +38,24 @@ export const defaultCttOptions = Object.freeze({
   adequateParticipants: 30,
   // Pengecoh dianggap berfungsi bila dipilih minimal porsi ini dari peserta.
   distractorMinShare: 0.05,
-  // Penanda daya pembeda rendah (indeks D), sama dengan halaman Analisis Kualitas.
-  lowDiscrimination: 0.25,
-  // Mulai batas ini daya pembeda disebut baik pada interpretasi.
+  // Kategori indeks D mengikuti Ebel: < 0,20 jelek, 0,20–0,29 perlu perbaikan, 0,30–0,39 cukup, >= 0,40 baik.
+  lowDiscrimination: 0.2,
+  marginalDiscrimination: 0.3,
   goodDiscrimination: 0.4,
-  // Batas kategori kesulitan, sama dengan halaman Analisis Kualitas.
-  easyFrom: 0.7,
-  hardBelow: 0.4,
+  // Kategori kesukaran mengikuti Arikunto: sukar p <= 0,30; sedang 0,31–0,70; mudah p > 0,70.
+  easyAbove: 0.7,
+  hardMax: 0.3,
+  // Soal sangat mudah/sangat sukar yang perlu ditinjau.
+  veryEasyFrom: 0.9,
+  veryHardMax: 0.2,
+  // Peringatan bila porsi respons kosong pada satu soal mencapai batas ini.
+  blankWarningShare: 0.1,
   // ID peserta kelompok atas/bawah hanya disertakan bila diminta (BRD 9.2: data peserta tidak dibuka tanpa perlu).
   includeParticipantIds: false,
 })
 
 /** Versi metode perhitungan. Naikkan bila rumus atau aturan penanda berubah agar hasil lama tetap dapat ditelusuri. */
-export const CTT_METHOD_VERSION = '1.1.0'
+export const CTT_METHOD_VERSION = '1.2.0'
 
 /** Toleransi numerik untuk mencocokkan hasil dengan hitungan acuan (NFR-14). */
 export const CTT_TOLERANCE = 0.001
@@ -225,6 +234,7 @@ function analyzeItem(item, participants, matrix, totals, upper, lower, settings)
     distractorCount: item.trueFalse ? 0 : item.labels.length - 1,
     effectiveDistractors: null,
     flags: [],
+    followUp: null,
     analyzed: false,
     interpretation: [],
     recommendations: [],
@@ -243,7 +253,7 @@ function analyzeItem(item, participants, matrix, totals, upper, lower, settings)
   const scores = counted.map((participantId) => cell(participantId).score)
   const correct = scores.reduce((sum, score) => sum + score, 0)
   result.difficulty = correct / n
-  result.difficultyBand = result.difficulty >= settings.easyFrom ? 'Mudah' : result.difficulty < settings.hardBelow ? 'Sulit' : 'Sedang'
+  result.difficultyBand = result.difficulty > settings.easyAbove ? 'Mudah' : result.difficulty <= settings.hardMax ? 'Sulit' : 'Sedang'
 
   // Indeks D = proporsi benar kelompok atas - proporsi benar kelompok bawah.
   const groupProportion = (group) => {
@@ -275,7 +285,14 @@ function analyzeItem(item, participants, matrix, totals, upper, lower, settings)
     result.effectiveDistractors = result.distractors.filter((distractor) => distractor.effective).length
     if (result.effectiveDistractors < result.distractorCount) result.flags.push('distractor-review')
   }
-  if (result.discrimination !== null && result.discrimination < settings.lowDiscrimination) result.flags.push('low-discrimination')
+  if (result.discrimination !== null && result.discrimination >= 0) {
+    if (result.discrimination < settings.lowDiscrimination) result.flags.push('low-discrimination')
+    else if (result.discrimination < settings.marginalDiscrimination) result.flags.push('marginal-discrimination')
+  }
+  if (result.difficulty >= settings.veryEasyFrom || result.difficulty <= settings.veryHardMax) result.flags.push('extreme-difficulty')
+  const blankShare = participants.length ? (distribution.blank.count + distribution.missing.count) / participants.length : 0
+  if (blankShare >= settings.blankWarningShare) result.flags.push('high-blank')
+  if (distribution.invalid.count) result.flags.push('data-check')
 
   // Indikasi kunci keliru: kelompok bawah lebih sering benar, atau ada opsi lain yang lebih menarik bagi kelompok atas daripada kunci.
   const keyUpper = distribution[item.answer].upper
@@ -284,7 +301,8 @@ function analyzeItem(item, participants, matrix, totals, upper, lower, settings)
   const negative = result.discrimination !== null ? result.discrimination < 0 : result.pointBiserial !== null && result.pointBiserial < 0
   if (negative || rivals.length) result.flags.push('key-check')
 
-  describeItem(result, item, rivals, negative, settings)
+  describeItem(result, item, rivals, negative, blankShare, settings)
+  result.followUp = followUpFor(result.flags)
   return result
 }
 
@@ -292,38 +310,61 @@ const percent = (value) => Math.round(value * 100)
 const decimal = (value) => value.toFixed(2).replace('.', ',')
 
 /** Menyusun interpretasi dan rekomendasi dalam bahasa sederhana (BRD 2.1 dan bab 8). */
-function describeItem(result, item, rivals, negative, settings) {
+function describeItem(result, item, rivals, negative, blankShare, settings) {
   const {interpretation, recommendations} = result
   const band = {Mudah: 'mudah', Sedang: 'sedang', Sulit: 'sulit'}[result.difficultyBand]
   interpretation.push(`Soal tergolong ${band}: ${percent(result.difficulty)}% peserta menjawab benar.`)
-  if (result.difficultyBand === 'Mudah' && result.difficulty >= 0.9) recommendations.push('Soal hampir selalu dijawab benar; pertimbangkan apakah masih perlu dipakai untuk membedakan peserta.')
-  if (result.difficultyBand === 'Sulit' && result.difficulty < 0.2) recommendations.push('Sangat sedikit peserta yang benar; periksa redaksi soal, kunci, dan kesesuaian dengan materi yang diajarkan.')
+  if (result.difficulty >= settings.veryEasyFrom) recommendations.push('Soal hampir selalu dijawab benar; pertimbangkan apakah masih perlu dipakai untuk membedakan peserta.')
+  if (result.difficulty <= settings.veryHardMax) recommendations.push('Sangat sedikit peserta yang benar; periksa redaksi soal, kunci, dan kesesuaian dengan materi yang diajarkan.')
 
-  const d = result.discrimination
-  if (d !== null) {
-    if (d < 0) interpretation.push(`Daya pembeda negatif (${decimal(d)}): kelompok bawah justru lebih sering benar daripada kelompok atas.`)
-    else if (d < settings.lowDiscrimination) interpretation.push(`Daya pembeda rendah (${decimal(d)}): soal kurang mampu membedakan peserta yang menguasai materi dari yang belum.`)
-    else if (d < settings.goodDiscrimination) interpretation.push(`Daya pembeda cukup (${decimal(d)}): kelompok atas lebih sering benar daripada kelompok bawah.`)
-    else interpretation.push(`Daya pembeda baik (${decimal(d)}): kelompok atas jauh lebih sering benar daripada kelompok bawah.`)
-    if (d >= 0 && d < settings.lowDiscrimination) recommendations.push('Tinjau kejelasan redaksi dan pengecoh agar soal lebih membedakan peserta.')
-  }
-
+  // Saran pemeriksaan kunci ditaruh paling awal karena prioritasnya tertinggi.
   if (negative || rivals.length) {
     const reason = rivals.length ? `opsi ${rivals.join(', ')} lebih banyak dipilih kelompok atas daripada kunci ${item.answer}` : 'daya pembedanya negatif'
     recommendations.push(`Periksa kunci jawaban: ${reason}. Bisa jadi kuncinya keliru atau ada lebih dari satu jawaban yang dapat dibenarkan.`)
   }
 
+  const d = result.discrimination
+  if (d !== null) {
+    if (d < 0) interpretation.push(`Daya pembeda negatif (${decimal(d)}): kelompok bawah justru lebih sering benar daripada kelompok atas.`)
+    else if (d < settings.lowDiscrimination) interpretation.push(`Daya pembeda jelek (${decimal(d)}): soal hampir tidak membedakan peserta yang menguasai materi dari yang belum.`)
+    else if (d < settings.marginalDiscrimination) interpretation.push(`Daya pembeda perlu perbaikan (${decimal(d)}): perbedaan kelompok atas dan bawah masih kecil.`)
+    else if (d < settings.goodDiscrimination) interpretation.push(`Daya pembeda cukup (${decimal(d)}): kelompok atas lebih sering benar daripada kelompok bawah.`)
+    else interpretation.push(`Daya pembeda baik (${decimal(d)}): kelompok atas jauh lebih sering benar daripada kelompok bawah.`)
+    if (d >= 0 && d < settings.lowDiscrimination) recommendations.push('Revisi besar atau ganti soal ini: soal belum mampu membedakan peserta.')
+    else if (d >= settings.lowDiscrimination && d < settings.marginalDiscrimination) recommendations.push('Tinjau kejelasan redaksi dan pengecoh agar soal lebih membedakan peserta.')
+  }
+
   if (result.distractors) {
     const unused = result.distractors.filter((distractor) => distractor.count === 0).map((distractor) => distractor.option)
     const rare = result.distractors.filter((distractor) => distractor.count > 0 && !distractor.effective && distractor.upper > distractor.lower && !rivals.includes(distractor.option)).map((distractor) => distractor.option)
-    const weak = result.distractors.filter((distractor) => distractor.count > 0 && !distractor.effective && distractor.upper <= distractor.lower).map((distractor) => distractor.option)
+    const weak = result.distractors.filter((distractor) => distractor.count > 0 && !distractor.effective && distractor.upper <= distractor.lower && !rivals.includes(distractor.option)).map((distractor) => distractor.option)
     interpretation.push(`${result.effectiveDistractors} dari ${result.distractorCount} pengecoh berfungsi.`)
     if (unused.length) recommendations.push(`Opsi ${unused.join(', ')} tidak dipilih siapa pun; pertimbangkan mengganti pengecoh ini.`)
     if (rare.length) recommendations.push(`Opsi ${rare.join(', ')} lebih banyak dipilih kelompok atas daripada kelompok bawah; periksa apakah opsi ini terlalu mirip jawaban benar.`)
     if (weak.length) recommendations.push(`Opsi ${weak.join(', ')} jarang menarik peserta kelompok bawah; pertimbangkan membuatnya lebih masuk akal.`)
   }
 
+  if (blankShare >= settings.blankWarningShare) recommendations.push(`${percent(blankShare)}% peserta tidak menjawab soal ini; periksa apakah waktu ujian cukup atau redaksi soal membingungkan.`)
+  if (result.distribution.invalid.count) recommendations.push('Ada respons yang tidak sesuai opsi soal; periksa kembali file hasil ujian sebelum mengambil keputusan.')
   if (!recommendations.length) recommendations.push('Tidak ada masalah yang menonjol; soal dapat dipertahankan.')
+}
+
+/** Prioritas tindak lanjut soal. Hanya saran; keputusan tetap di tangan dosen (RB-12-2). */
+const FOLLOW_UP_RULES = [
+  {flag: 'key-check', priority: 'high', reason: 'Kunci jawaban perlu dicek'},
+  {flag: 'low-discrimination', priority: 'high', reason: 'Daya pembeda jelek (< 0,20)'},
+  {flag: 'marginal-discrimination', priority: 'medium', reason: 'Daya pembeda perlu perbaikan (0,20–0,29)'},
+  {flag: 'extreme-difficulty', priority: 'medium', reason: 'Soal terlalu mudah atau terlalu sukar'},
+  {flag: 'high-blank', priority: 'medium', reason: 'Banyak peserta tidak menjawab'},
+  {flag: 'distractor-review', priority: 'low', reason: 'Ada pengecoh yang belum berfungsi'},
+]
+const PRIORITY_ORDER = ['high', 'medium', 'low']
+
+function followUpFor(flags) {
+  const matched = FOLLOW_UP_RULES.filter((rule) => flags.includes(rule.flag))
+  if (!matched.length) return null
+  const priority = PRIORITY_ORDER.find((level) => matched.some((rule) => rule.priority === level))
+  return {priority, reasons: matched.map((rule) => rule.reason)}
 }
 
 function summarizeTest(itemResults, participants, matrix, totals, itemList, settings) {

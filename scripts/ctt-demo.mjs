@@ -30,6 +30,7 @@ const result = analyzeCtt({responses: responsesFromCsvRows(readCsv(values.respon
 
 const fixed = (value, digits = 3) => value === null || value === undefined ? '' : value.toFixed(digits)
 const distractorText = (item) => item.distractors ? `${item.effectiveDistractors}/${item.distractorCount}` : item.distractorCount ? '' : 'tidak berlaku'
+const priorityLabel = (item) => ({high: 'Tinggi', medium: 'Sedang', low: 'Rendah'})[item.followUp?.priority] ?? '-'
 const distribution = (item) => Object.entries(item.distribution).filter(([, entry]) => entry.count).map(([choice, entry]) => `${choice}=${entry.count}`).join(' ')
 
 console.log(`Peserta: ${result.participantCount} · Soal: ${result.itemCount} · Kelompok atas/bawah: ${result.groups.size} peserta · Kosong: ${result.method.settings.blank} · Metode ${result.method.name} v${result.method.version}`)
@@ -45,6 +46,7 @@ console.table(result.items.map((item) => ({
   distribusi: distribution(item),
   status: item.sufficiency,
   penanda: item.flags.join(', '),
+  tindak_lanjut: priorityLabel(item),
 })))
 const test = result.test
 console.log(`Rata-rata p ${fixed(test.averageDifficulty)} · rata-rata D ${fixed(test.averageDiscrimination)} · pengecoh efektif ${test.effectiveDistractorShare === null ? '—' : Math.round(test.effectiveDistractorShare * 100) + '%'} · KR-20 ${test.reliability.kr20 === null ? '— (' + test.reliability.note + ')' : fixed(test.reliability.kr20)}`)
@@ -58,9 +60,9 @@ for (const item of result.items) {
 for (const issue of result.issues) console.log(`Peringatan: ${issue.message}`)
 
 if (values.out) {
-  const header = ['id_soal', 'versi_soal', 'kunci', 'n', 'proporsi_benar', 'kategori', 'daya_pembeda_d', 'benar_kelompok_atas', 'benar_kelompok_bawah', 'point_biserial_terkoreksi', 'pengecoh_efektif', 'jumlah_pengecoh', 'distribusi', 'status_data', 'sudah_dianalisis', 'penanda', 'interpretasi', 'rekomendasi', 'catatan', 'versi_metode']
+  const header = ['id_soal', 'versi_soal', 'kunci', 'n', 'proporsi_benar', 'kategori', 'daya_pembeda_d', 'benar_kelompok_atas', 'benar_kelompok_bawah', 'point_biserial_terkoreksi', 'pengecoh_efektif', 'jumlah_pengecoh', 'distribusi', 'status_data', 'sudah_dianalisis', 'prioritas_tindak_lanjut', 'alasan_tindak_lanjut', 'penanda', 'interpretasi', 'rekomendasi', 'catatan', 'versi_metode']
   const rows = result.items.map((item) => [item.itemId, item.version, item.key, item.n, fixed(item.difficulty), item.difficultyBand ?? '', fixed(item.discrimination), item.upperCorrect ?? '', item.lowerCorrect ?? '', fixed(item.pointBiserial),
-    item.effectiveDistractors ?? (item.distractorCount ? '' : 'tidak berlaku'), item.distractorCount, distribution(item), item.sufficiency, item.analyzed ? 'ya' : 'tidak', item.flags.join('; '), item.interpretation.join(' '), item.recommendations.join(' '), item.notes.join(' '), result.method.version])
+    item.effectiveDistractors ?? (item.distractorCount ? '' : 'tidak berlaku'), item.distractorCount, distribution(item), item.sufficiency, item.analyzed ? 'ya' : 'tidak', priorityLabel(item), item.followUp?.reasons.join('; ') ?? '', item.flags.join('; '), item.interpretation.join(' '), item.recommendations.join(' '), item.notes.join(' '), result.method.version])
   writeFileSync(values.out, serializeCsv([header, ...rows]))
   console.log(`Laporan disimpan ke ${values.out}`)
 }

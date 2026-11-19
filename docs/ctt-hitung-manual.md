@@ -52,9 +52,9 @@ p = jumlah benar ÷ jumlah peserta. D = (benar di A ÷ 3) − (benar di B ÷ 3).
 | CTT-02 | 5 | 0,50 | Sedang | 3 | 0 | 1,000 |
 | CTT-03 | 4 | 0,40 | Sedang | 3 | 0 | 1,000 |
 | CTT-04 | 2 | 0,20 | Sulit | 2 | 0 | 2/3 = 0,667 |
-| CTT-05 | 7 | 0,70 | Mudah | 2 | 1 | 1/3 = 0,333 |
+| CTT-05 | 7 | 0,70 | Sedang | 2 | 1 | 1/3 = 0,333 |
 
-Kategori mengikuti halaman Analisis Kualitas: Mudah p ≥ 0,70; Sedang 0,40 ≤ p < 0,70; Sulit p < 0,40. Rata-rata p = 2,6 ÷ 5 = 0,52. Rata-rata D = 3,667 ÷ 5 = 0,733. Tidak ada soal dengan D < 0,25.
+Kategori kesukaran mengikuti Arikunto: Sulit (sukar) p ≤ 0,30; Sedang 0,31–0,70; Mudah p > 0,70. CTT-05 dengan p = 0,70 tepat di batas dan masuk Sedang. Rata-rata p = 2,6 ÷ 5 = 0,52. Rata-rata D = 3,667 ÷ 5 = 0,733. Tidak ada soal dengan D < 0,30.
 
 ## Point-biserial terkoreksi
 
@@ -123,11 +123,29 @@ Setiap soal mendapat `interpretation` (penjelasan bahasa sederhana) dan `recomme
 
 | Penanda | Muncul bila | Rekomendasi yang ditampilkan |
 |---|---|---|
-| `distractor-review` | Ada pengecoh yang belum berfungsi | Opsi tidak dipilih → ganti pengecoh; opsi lebih banyak dipilih kelompok atas → periksa kemiripan dengan jawaban benar; opsi jarang menarik kelompok bawah → buat lebih masuk akal |
-| `low-discrimination` | D < 0,25 | Tinjau redaksi dan pengecoh |
 | `key-check` | D < 0, **atau** ada opsi lain yang lebih banyak dipilih kelompok atas daripada kunci (point-biserial negatif dipakai bila D tidak dapat dihitung) | Periksa kunci jawaban; mungkin keliru atau ada lebih dari satu jawaban yang dapat dibenarkan |
+| `low-discrimination` | 0 ≤ D < 0,20 (jelek menurut Ebel) | Revisi besar atau ganti soal |
+| `marginal-discrimination` | 0,20 ≤ D < 0,30 (perlu perbaikan menurut Ebel) | Tinjau redaksi dan pengecoh |
+| `extreme-difficulty` | p ≥ 0,90 atau p ≤ 0,20 | Hampir selalu benar → pertimbangkan perlunya; sangat sedikit yang benar → periksa redaksi, kunci, kesesuaian materi |
+| `high-blank` | Respons kosong ≥ 10% peserta | Periksa kecukupan waktu ujian atau kejelasan redaksi |
+| `distractor-review` | Ada pengecoh yang belum berfungsi | Opsi tidak dipilih → ganti pengecoh; opsi lebih banyak dipilih kelompok atas → periksa kemiripan dengan jawaban benar; opsi jarang menarik kelompok bawah → buat lebih masuk akal |
+| `data-check` | Ada respons di luar opsi soal | Periksa file hasil ujian sebelum mengambil keputusan (masalah data, bukan masalah soal) |
 
-Kategori daya pembeda pada interpretasi: negatif (< 0), rendah (< 0,25), cukup (0,25–0,39), baik (≥ 0,40). Tambahan rekomendasi: p ≥ 0,90 (hampir selalu benar) dan p < 0,20 (sangat sedikit yang benar).
+Kategori daya pembeda pada interpretasi mengikuti Ebel: negatif (< 0), jelek (< 0,20), perlu perbaikan (0,20–0,29), cukup (0,30–0,39), baik (≥ 0,40).
+
+### Prioritas tindak lanjut
+
+Field `followUp` berisi prioritas dan alasannya. Hanya diisi untuk soal yang datanya memadai (`analyzed = true`) dan hanya berupa saran; keputusan tetap di tangan dosen (RB-12-2).
+
+| Prioritas | Penanda pemicu |
+|---|---|
+| Tinggi | `key-check`, `low-discrimination` |
+| Sedang | `marginal-discrimination`, `extreme-difficulty`, `high-blank` |
+| Rendah | `distractor-review` |
+
+`data-check` tidak memengaruhi prioritas karena menyangkut kualitas file, bukan kualitas soal.
+
+Hasil pada data uji: CTT-01 Sedang (10% kosong, pengecoh), CTT-02 Rendah, CTT-03 Rendah (+ `data-check`), CTT-04 Sedang (p = 0,20), CTT-05 tanpa tindak lanjut.
 
 Pada data uji tidak ada soal yang memicu `key-check`. Contoh kasusnya ada di `test/ctt.test.mjs` (blok "penanda kunci perlu dicek"): kunci K1 = A, tetapi 2 dari 3 peserta kelompok atas memilih B, sehingga D = 1/3 − 2/3 = −0,333.
 
@@ -137,21 +155,25 @@ Field `analyzed` bernilai `true` hanya bila status kecukupan bukan `insufficient
 
 ## Ketelusuran, privasi, toleransi, dan kinerja
 
-- **Metadata metode** (`result.method`): nama metode, versi (`CTT_METHOD_VERSION`, saat ini 1.1.0), waktu hitung, dan seluruh parameter yang dipakai. Disimpan bersama hasil agar hasil lama tetap dapat dijelaskan walau parameter berubah (BR-07, FSD FR-12 langkah 4). Naikkan versi bila rumus atau aturan penanda diubah.
+- **Metadata metode** (`result.method`): nama metode, versi (`CTT_METHOD_VERSION`, saat ini 1.2.0), waktu hitung, dan seluruh parameter yang dipakai. Disimpan bersama hasil agar hasil lama tetap dapat dijelaskan walau parameter berubah (BR-07, FSD FR-12 langkah 4). Naikkan versi bila rumus atau aturan penanda diubah.
 - **Privasi**: daftar ID peserta kelompok atas/bawah tidak disertakan secara bawaan. Aktifkan `includeParticipantIds: true` hanya untuk pemeriksaan internal oleh analis (BRD 9.2).
 - **Toleransi numerik** (NFR-14): `CTT_TOLERANCE = 0,001`. Hasil dianggap sesuai acuan bila selisihnya di bawah nilai ini; test memakai toleransi yang sama.
 - **Kinerja** (NFR-03, ≤ 2 menit untuk 200 peserta × 100 soal): test "kinerja" menjalankan ukuran tersebut; pada uji lokal selesai dalam puluhan milidetik.
 
-## Hal yang perlu disepakati dengan pakar assessment
+## Default sementara (menunggu persetujuan pakar assessment)
 
-Semua dibuat sebagai parameter di `defaultCttOptions`, jadi bisa diubah tanpa mengubah rumus.
+Semua dibuat sebagai parameter di `defaultCttOptions`, jadi bisa diubah tanpa mengubah rumus. Nilai di bawah dipilih karena paling umum dipakai dan mudah dipertanggungjawabkan.
 
-1. Aturan respons kosong: dihitung salah (bawaan) atau tidak dihitung.
-2. Ukuran daya pembeda yang dipakai untuk penanda: indeks D 27% (bawaan) atau point-biserial terkoreksi; batas penanda (bawaan D < 0,25).
-3. Batas jumlah peserta minimal (10) dan memadai (30).
-4. Kriteria pengecoh berfungsi (≥ 5% dan lebih banyak dipilih kelompok bawah).
-5. Batas kategori Mudah/Sedang/Sulit (bawaan mengikuti UI: 0,70 dan 0,40).
-6. Penanganan skor sama di batas kelompok atas/bawah (bawaan: diurutkan menurut ID peserta dan diberi catatan).
-7. Kategori daya pembeda dan aturan penanda `key-check` di atas.
-8. Toleransi numerik acuan (usulan 0,001).
-9. Apakah respons tidak valid diperlakukan sama dengan respons kosong (saat ini sama).
+| # | Hal | Default sementara | Acuan |
+|---|---|---|---|
+| 1 | Respons kosong | Dihitung salah; peringatan bila ≥ 10% per soal | Praktik umum ujian kelas (number-right scoring) |
+| 2 | Ukuran daya pembeda untuk penanda | Indeks D kelompok 27%; point-biserial terkoreksi sebagai pembanding | Kelley (27%), Ebel (kategori D) |
+| 3 | Jumlah peserta | Minimal 10, memadai 30 | Aturan praktis; di bawah 30 diberi label indikatif |
+| 4 | Pengecoh berfungsi | Dipilih ≥ 5% peserta dan lebih banyak oleh kelompok bawah | Haladyna & Downing; Rodriguez (2005) |
+| 5 | Kategori kesukaran | Sukar ≤ 0,30; sedang 0,31–0,70; mudah > 0,70 | Arikunto |
+| 6 | Skor sama di batas kelompok | Diurutkan menurut ID peserta, diberi catatan | Hasil selalu dapat diulang |
+| 7 | Penanda kunci | D < 0 atau opsi lain lebih menarik bagi kelompok atas | Anjuran pemeriksaan mis-key/double-key |
+| 8 | Toleransi numerik | 0,001 | Laporan 3 desimal |
+| 9 | Respons tidak valid | Seharusnya ditahan saat validasi impor (NFR-09); di modul dihitung salah sebagai cadangan dan diberi penanda `data-check` | NFR-09 |
+
+Halaman Analisis Kualitas saat ini masih memakai batas lama (sulit < 0,40, daya pembeda rendah < 0,25). Batas itu perlu disamakan saat halaman disambungkan ke hasil sungguhan.

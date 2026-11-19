@@ -52,7 +52,8 @@ describe('analisis CTT dengan data contoh (kosong dihitung salah)', () => {
   test('proporsi benar', () => {
     const expected = {'CTT-01': 0.8, 'CTT-02': 0.5, 'CTT-03': 0.4, 'CTT-04': 0.2, 'CTT-05': 0.7}
     for (const [id, p] of Object.entries(expected)) close(byId(result, id).difficulty, p)
-    assert.deepEqual(result.items.map((item) => item.difficultyBand), ['Mudah', 'Sedang', 'Sedang', 'Sulit', 'Mudah'])
+    // Batas Arikunto: sukar p <= 0,30; sedang 0,31–0,70; mudah p > 0,70. CTT-05 (p = 0,70) masuk sedang.
+    assert.deepEqual(result.items.map((item) => item.difficultyBand), ['Mudah', 'Sedang', 'Sedang', 'Sulit', 'Sedang'])
   })
 
   test('daya pembeda D = pA - pB', () => {
@@ -86,11 +87,30 @@ describe('analisis CTT dengan data contoh (kosong dihitung salah)', () => {
   })
 
   test('penanda dan status data', () => {
-    // D terendah 0,333 (CTT-05) masih di atas batas 0,25; semua soal PG punya pengecoh yang belum berfungsi.
-    assert.deepEqual(result.items.map((item) => item.flags), [['distractor-review'], ['distractor-review'], ['distractor-review'], ['distractor-review'], []])
+    // D terendah 0,333 (CTT-05) masuk kategori cukup; semua soal PG punya pengecoh yang belum berfungsi.
+    const flags = Object.fromEntries(result.items.map((item) => [item.itemId, [...item.flags].sort()]))
+    assert.deepEqual(flags, {
+      'CTT-01': ['distractor-review', 'high-blank'],
+      'CTT-02': ['distractor-review'],
+      'CTT-03': ['data-check', 'distractor-review'],
+      'CTT-04': ['distractor-review', 'extreme-difficulty'],
+      'CTT-05': [],
+    })
     const stricter = analyzeCtt({responses, items, options: {lowDiscrimination: 0.4}})
     assert.deepEqual(byId(stricter, 'CTT-05').flags, ['low-discrimination'])
+    const marginal = analyzeCtt({responses, items, options: {marginalDiscrimination: 0.4}})
+    assert.deepEqual(byId(marginal, 'CTT-05').flags, ['marginal-discrimination'])
     assert.ok(result.items.every((item) => item.sufficiency === 'indicative'))
+  })
+
+  test('prioritas tindak lanjut', () => {
+    assert.deepEqual(result.items.map((item) => item.followUp?.priority ?? null), ['medium', 'low', 'low', 'medium', null])
+    assert.deepEqual(byId(result, 'CTT-04').followUp.reasons, ['Soal terlalu mudah atau terlalu sukar', 'Ada pengecoh yang belum berfungsi'])
+  })
+
+  test('peringatan kosong dan data tidak valid', () => {
+    assert.ok(byId(result, 'CTT-01').recommendations.some((line) => line.startsWith('10% peserta tidak menjawab')))
+    assert.ok(byId(result, 'CTT-03').recommendations.some((line) => line.startsWith('Ada respons yang tidak sesuai opsi soal')))
   })
 
   test('ringkasan tes dan KR-20', () => {
@@ -115,6 +135,7 @@ describe('aturan kosong = exclude', () => {
     assert.equal(item.sufficiency, 'insufficient')
     assert.equal(item.analyzed, false)
     assert.match(item.interpretation[0], /Data belum cukup/)
+    assert.equal(item.followUp, null)
     assert.equal(item.difficulty, null)
     assert.equal(item.discrimination, null)
     assert.equal(item.distribution.A.count, 8)
@@ -173,6 +194,8 @@ describe('penanda kunci perlu dicek', () => {
     assert.ok(suspect.flags.includes('key-check'))
     assert.ok(suspect.recommendations.some((line) => line.startsWith('Periksa kunci jawaban: opsi B lebih banyak dipilih kelompok atas daripada kunci A')))
     assert.match(suspect.interpretation[1], /Daya pembeda negatif/)
+    assert.equal(suspect.followUp.priority, 'high')
+    assert.equal(suspect.followUp.reasons[0], 'Kunci jawaban perlu dicek')
   })
 
   test('soal normal tidak diberi penanda kunci', () => {
