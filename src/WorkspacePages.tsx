@@ -1,7 +1,9 @@
 import { Check, Download, FileSpreadsheet, Plus, Search, Upload } from 'lucide-react'
 import Papa from 'papaparse'
-import { useRef, useState, type FormEvent } from 'react'
-import { exportQuestionReport } from './api'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { createImport, exportQuestionReport, listImports, runAnalysis, type ImportError } from './api'
+import { academicYears, defaultSemester, formatPeriod, semesters } from '../shared/academic-period.js'
+import { CttPreview, type ResponseRow } from './CttPreview'
 import { courses, downloadCsv, downloadFile, formatDate, statusInfo, type Course, type ExamImport, type ExamPackage, type PackageInput, type Profile, type Question } from './data'
 import { Dialog, Empty, PageHeading, Pill } from './ui'
 
@@ -84,27 +86,53 @@ export function Packages({packages, questions, initialOpen, onAdd}: {packages: E
 }
 
 const csvColumns = ['id_peserta', 'id_soal', 'versi_soal', 'respons'] as const
-type ResponseRow = Record<(typeof csvColumns)[number], string>
 
-export function Results({imports, initialOpen, onAdd}: {imports: ExamImport[]; initialOpen: boolean; onAdd: (item: ExamImport) => void}) {
+type ResultsProps = {packages: ExamPackage[]; questions: Question[]; initialOpen: boolean; onChanged: () => void; onToast: (message: string) => void}
+
+export function Results({packages, questions, initialOpen, onChanged, onToast}: ResultsProps) {
+  const [imports, setImports] = useState<ExamImport[] | null>(null)
+  const [listError, setListError] = useState('')
   const [open, setOpen] = useState(initialOpen)
-  const [preview, setPreview] = useState<{name: string; total: number; rows: ResponseRow[]} | null>(null)
+  const [packageId, setPackageId] = useState(packages[0]?.id ?? '')
+  const [semester, setSemester] = useState<string>(() => defaultSemester())
+  const [year, setYear] = useState(() => academicYears()[0])
+  const period = formatPeriod(semester, year)
+  const [preview, setPreview] = useState<{id: number; name: string; total: number; rows: ResponseRow[]; allRows: ResponseRow[]} | null>(null)
   const [error, setError] = useState('')
+  const [rowErrors, setRowErrors] = useState<{errors: ImportError[]; count: number} | null>(null)
   const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [analyze, setAnalyze] = useState<ExamImport | null>(null)
+  const [blank, setBlank] = useState<'incorrect' | 'exclude'>('incorrect')
+  const [running, setRunning] = useState(false)
+  const [runError, setRunError] = useState('')
   const readId = useRef(0)
+  const importId = useRef('')
+  // Pilihan paket yang tampil di layar selalu yang dipakai, termasuk saat state belum terisi.
+  const activePackageId = packages.some((item) => item.id === packageId) ? packageId : packages[0]?.id ?? ''
+  const selectedPackage = packages.find((item) => item.id === activePackageId)
+
+  function reload() {
+    listImports().then((items) => {setImports(items); setListError('')}).catch((reason: Error) => setListError(reason.message))
+  }
+  useEffect(reload, [])
 
   function close() {
     readId.current += 1
+    importId.current = ''
     setOpen(false)
     setPreview(null)
     setError('')
+    setRowErrors(null)
     setLoading(false)
   }
 
   async function read(file?: File) {
     const id = ++readId.current
+    importId.current = ''
     setPreview(null)
     setError('')
+    setRowErrors(null)
     setLoading(false)
     if (!file) return
     if (!file.name.toLowerCase().endsWith('.csv') || file.size > 5 * 1024 * 1024) {
@@ -118,14 +146,7 @@ export function Results({imports, initialOpen, onAdd}: {imports: ExamImport[]; i
       const parsed = Papa.parse<ResponseRow>(source, {header: true, skipEmptyLines: 'greedy', transformHeader: (value) => value.trim().toLowerCase(), transform: (value) => value.trim()})
       if (csvColumns.some((name) => !parsed.meta.fields?.includes(name))) throw new Error('Kolom CSV belum lengkap. Gunakan template di bawah.')
       if (parsed.errors.length || !parsed.data.length) throw new Error('CSV kosong atau format barisnya tidak konsisten.')
-      const keys = new Set<string>()
-      for (const [index, row] of parsed.data.entries()) {
-        if (!row.id_peserta || !row.id_soal || !row.versi_soal) throw new Error(`Lengkapi ID peserta, ID soal, dan versi soal pada baris ${index + 2}.`)
-        const key = JSON.stringify([row.id_peserta, row.id_soal, row.versi_soal])
-        if (keys.has(key)) throw new Error(`Ditemukan respons duplikat pada baris ${index + 2}.`)
-        keys.add(key)
-      }
-      setPreview({name: file.name, total: parsed.data.length, rows: parsed.data.slice(0, 4)})
+      setPreview({id, name: file.name, total: parsed.data.length, rows: parsed.data.slice(0, 4), allRows: parsed.data})
     } catch (error) {
       if (id === readId.current) setError(error instanceof Error ? error.message : 'File gagal dibaca.')
     } finally {
@@ -133,39 +154,110 @@ export function Results({imports, initialOpen, onAdd}: {imports: ExamImport[]; i
     }
   }
 
+  async function save() {
+    if (!preview || saving) return
+    if (!activePackageId) {
+      setError('Belum ada paket ujian. Buat paket di menu Paket Ujian terlebih dahulu.')
+      return
+    }
+    importId.current ||= `IMP-${crypto.randomUUID().toUpperCase()}`
+    setSaving(true)
+    setError('')
+    setRowErrors(null)
+    try {
+      await createImport({id: importId.current, packageId: activePackageId, period, fileName: preview.name, rows: preview.allRows.map((row) => ({...row}))})
+      close()
+      reload()
+      onToast('Hasil ujian tersimpan. Jalankan analisis dari riwayat impor.')
+    } catch (reason) {
+      const failure = reason as Error & {errors?: ImportError[]; errorCount?: number}
+      importId.current = ''
+      setError(failure.message)
+      if (failure.errors?.length) setRowErrors({errors: failure.errors, count: failure.errorCount ?? failure.errors.length})
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function startAnalysis() {
+    if (!analyze || running) return
+    setRunning(true)
+    setRunError('')
+    try {
+      await runAnalysis(analyze.id, blank)
+      setAnalyze(null)
+      reload()
+      onChanged()
+      onToast('Analisis CTT selesai dan hasilnya disimpan.')
+    } catch (reason) {
+      setRunError(reason instanceof Error ? reason.message : 'Analisis gagal dijalankan.')
+    } finally {
+      setRunning(false)
+    }
+  }
+
   return <>
-    <PageHeading title="Hasil Ujian" description="Pratinjau file respons dan pantau riwayat impor di perangkat ini."
-      action={<button className="button primary" onClick={() => setOpen(true)}><Upload size={17} /> Impor Hasil Ujian</button>} />
+    <PageHeading title="Hasil Ujian" description="Impor respons per paket ujian, validasi, simpan, lalu jalankan analisis CTT."
+      action={<button className="button primary" onClick={() => setOpen(true)} disabled={!packages.length}><Upload size={17} /> Impor Hasil Ujian</button>} />
     <section className="card table-card">
       <div className="table-tools"><h2>Riwayat Impor</h2></div>
-      {imports.length ? <div className="table-scroll" tabIndex={0} aria-label="Tabel riwayat impor"><table>
-        <thead><tr><th>Nama File</th><th>Jumlah Respons</th><th>Tanggal</th><th>Status</th></tr></thead>
-        <tbody>{imports.map((item) => <tr key={item.id}><th scope="row"><strong>{item.name}</strong><small>{item.id}</small></th>
-          <td>{item.rows}</td><td>{formatDate(item.created)}</td><td><Pill tone="green">Tercatat</Pill></td></tr>)}</tbody>
-      </table></div> : <Empty title="Belum ada riwayat impor" description="Pilih file CSV untuk memulai pratinjau." />}
+      {listError ? <Empty title="Riwayat impor belum bisa dimuat" description={listError} action={<button className="button secondary" onClick={reload}>Coba Lagi</button>} />
+        : !imports ? <p className="loading-state" role="status">Memuat riwayat impor…</p>
+        : imports.length ? <div className="table-scroll" tabIndex={0} aria-label="Tabel riwayat impor"><table>
+          <thead><tr><th>Paket · Periode</th><th>File</th><th>Peserta</th><th>Status</th><th>Tindakan</th></tr></thead>
+          <tbody>{imports.map((item) => <tr key={item.id}>
+            <th scope="row"><strong>{item.packageName}</strong><small>{item.period} · {formatDate(item.created)}</small></th>
+            <td>{item.fileName}<small className="cell-note">{item.rowCount} baris</small></td>
+            <td>{item.participantCount}</td>
+            <td>{item.runId ? <Pill tone="green">Dianalisis</Pill> : <Pill tone="amber">Tersimpan</Pill>}
+              {item.summary && <small className="cell-note">Tinggi {item.summary.followUp.high} · Sedang {item.summary.followUp.medium} · Rendah {item.summary.followUp.low}</small>}</td>
+            <td>{item.runId
+              ? <a className="text-button" href={`#/analisis-kualitas?impor=${encodeURIComponent(item.id)}`}>Lihat Hasil</a>
+              : <button className="button secondary compact" onClick={() => {setRunError(''); setBlank('incorrect'); setAnalyze(item)}}>Jalankan Analisis</button>}</td>
+          </tr>)}</tbody>
+        </table></div> : <Empty title="Belum ada hasil ujian" description="Impor file respons untuk paket ujian yang sudah dilaksanakan." />}
     </section>
     {open && <Dialog title="Impor Hasil Ujian" wide onClose={close}>
       <div className="dialog-content">
-        <label className="file-drop"><span className="icon-tile tone-blue"><FileSpreadsheet size={24} /></span><strong>Pilih file respons CSV</strong><small>Gunakan ID peserta samaran. Maksimal 5 MB.</small><input type="file" accept=".csv,text/csv" onChange={(event) => void read(event.target.files?.[0])} /></label>
-        <button className="text-button" onClick={() => downloadCsv('template-respons-ujian.csv', [[...csvColumns], ['P001', 'BS-240', '1', 'A']])}><Download size={16} /> Unduh Template CSV</button>
+        <div className="form-grid">
+          <label className="field">Paket Ujian<select value={activePackageId} onChange={(event) => {setPackageId(event.target.value); setRowErrors(null); importId.current = ''}}>
+            {packages.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.items.length} soal</option>)}</select></label>
+          <fieldset className="field period-field"><legend>Periode</legend><div className="period-fields">
+            <select aria-label="Semester" value={semester} onChange={(event) => {setSemester(event.target.value); importId.current = ''}}>{semesters.map((item) => <option key={item}>{item}</option>)}</select>
+            <select aria-label="Tahun akademik" value={year} onChange={(event) => {setYear(event.target.value); importId.current = ''}}>{academicYears().map((item) => <option key={item}>{item}</option>)}</select>
+          </div></fieldset>
+        </div>
+        <label className="file-drop"><span className="icon-tile tone-blue"><FileSpreadsheet size={24} /></span><strong>Pilih file respons CSV</strong><small>Gunakan ID peserta samaran. Satu baris per peserta per soal. Maksimal 5 MB.</small><input type="file" accept=".csv,text/csv" onChange={(event) => void read(event.target.files?.[0])} /></label>
+        <button className="text-button" onClick={() => downloadCsv('template-respons-ujian.csv', [[...csvColumns], ...(selectedPackage?.items.slice(0, 3).map((item) => ['P001', item.questionId, String(item.version), 'A']) ?? [['P001', 'BS-240', '1', 'A']])])}><Download size={16} /> Unduh Template CSV untuk Paket Ini</button>
         {loading && <p className="muted" role="status">Membaca file…</p>}
         {error && <p className="form-error" role="alert">{error}</p>}
+        {rowErrors && <div className="inset import-errors" role="alert"><strong>{rowErrors.count} masalah di file</strong>
+          <ul>{rowErrors.errors.map((item, index) => <li key={index}>{item.row ? `Baris ${item.row}: ` : ''}{item.message}</li>)}</ul>
+          {rowErrors.count > rowErrors.errors.length && <p className="muted">Menampilkan {rowErrors.errors.length} masalah pertama.</p>}</div>}
         {preview && <><p><strong>{preview.name}</strong> · {preview.total} baris respons</p>
           <div className="table-scroll preview-table" tabIndex={0} aria-label="Tabel pratinjau CSV"><table>
             <thead><tr><th>Peserta</th><th>Soal</th><th>Versi</th><th>Respons</th></tr></thead>
             <tbody>{preview.rows.map((row, index) => <tr key={index}><td>{row.id_peserta}</td><td>{row.id_soal}</td><td>{row.versi_soal}</td><td>{row.respons || 'Kosong'}</td></tr>)}</tbody>
           </table></div>
-          <p className="muted">Prototipe mencatat nama file dan jumlah baris. Analisis menggunakan data contoh.</p>
+          <p className="muted">Server memeriksa setiap baris terhadap paket yang dipilih: ID dan versi soal, opsi jawaban, jawaban ganda, dan kelengkapan per peserta. File yang bermasalah tidak disimpan.</p>
+          <CttPreview key={preview.id} rows={preview.allRows} questions={questions} />
         </>}
       </div>
       <footer className="dialog-footer">
-        <button className="button secondary" onClick={close}>Batal</button>
-        <button className="button primary" disabled={!preview} onClick={() => {
-          if (!preview) return
-          onAdd({id: `IMP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, name: preview.name, rows: preview.total, created: new Date().toISOString()})
-          close()
-        }}>Simpan Riwayat</button>
+        <button className="button secondary" onClick={close} disabled={saving}>Batal</button>
+        <button className="button primary" disabled={!preview || saving} onClick={() => void save()}>{saving ? 'Memvalidasi…' : 'Validasi & Simpan'}</button>
       </footer>
+    </Dialog>}
+    {analyze && <Dialog title="Jalankan Analisis CTT" onClose={() => setAnalyze(null)}>
+      <div className="dialog-content">
+        <p><strong>{analyze.packageName}</strong> · {analyze.period} · {analyze.participantCount} peserta</p>
+        <label className="field">Respons kosong<select value={blank} onChange={(event) => setBlank(event.target.value as 'incorrect' | 'exclude')}>
+          <option value="incorrect">Dihitung salah (default)</option><option value="exclude">Tidak dihitung</option></select></label>
+        <div className="inset"><p>Hasil disimpan per versi soal dan tidak bisa ditimpa. Batas penilaian memakai default sementara yang menunggu persetujuan pakar assessment.</p></div>
+        {runError && <p className="form-error" role="alert">{runError}</p>}
+      </div>
+      <footer className="dialog-footer"><button className="button secondary" onClick={() => setAnalyze(null)} disabled={running}>Batal</button>
+        <button className="button primary" onClick={() => void startAnalysis()} disabled={running}>{running ? 'Menghitung…' : 'Jalankan Analisis'}</button></footer>
     </Dialog>}
   </>
 }

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { serializeCsv } from '../shared/csv.js'
 import { courses, statusInfo } from '../shared/question-fields.js'
+import { createAnalysis } from './analysis.mjs'
 import { initializeDatabase, transaction } from './database.mjs'
 import { seedPackages, seedQuestions } from './seed.mjs'
 import { ApiError, checkRevision, choiceField, inputObject, questionInput, requestId, stringField } from './validation.mjs'
@@ -43,6 +44,20 @@ async function requireQuestion(client, id, lock = false) {
 async function listQuestions(client) {
   const {rows} = await client.query('SELECT data FROM questions ORDER BY updated DESC, id')
   return rows.map(({data}) => data)
+}
+
+// Ringkasan analisis terbaru per soal, untuk label "Sudah dianalisis" dan "Perlu ditinjau". Tidak disimpan di data soal.
+async function latestAnalysis(client) {
+  const {rows} = await client.query(
+    `SELECT DISTINCT ON (result.question_id) result.question_id AS id, result.version, result.analyzed, result.priority, result.run_id AS "runId",
+       run.created, decision.decision
+     FROM analysis_results AS result
+     JOIN analysis_runs AS run ON run.id = result.run_id
+     LEFT JOIN follow_up_decisions AS decision ON decision.run_id = result.run_id AND decision.question_id = result.question_id
+     WHERE result.analyzed
+     ORDER BY result.question_id, run.created DESC`,
+  )
+  return new Map(rows.map(({id, ...row}) => [id, row]))
 }
 
 async function updateQuestion(client, question) {
@@ -165,6 +180,7 @@ export async function openWorkspace(pool) {
       checkRevision(current, data.revision)
       if (current.status !== 'review') throw new ApiError(409, 'Soal ini sudah keluar dari antrean review.')
       const question = {...current, status, reviewNote: note || undefined, revision: current.revision + 1, updated: now()}
+      if (status === 'approved') delete question.analysisContext
       await updateQuestion(client, question)
       await record(client, account.username, decisions[status], question, note)
       return question
@@ -235,9 +251,15 @@ export async function openWorkspace(pool) {
     return csv
   }
 
+  const analysis = createAnalysis(pool, {record, requireQuestion, updateQuestion})
+
   return {
-    list: () => transaction(pool, async (client) => ({questions: await listQuestions(client), packages: await listPackages(client)}), true),
-    saveQuestion, saveGeneratedQuestions, decide, history, savePackage, exportReport,
+    list: () => transaction(pool, async (client) => {
+      const analyses = await latestAnalysis(client)
+      const questions = (await listQuestions(client)).map((question) => analyses.has(question.id) ? {...question, analysis: analyses.get(question.id)} : question)
+      return {questions, packages: await listPackages(client)}
+    }, true),
+    saveQuestion, decide, history, savePackage, saveGeneratedQuestions, exportReport, analysis,
     async audit() {
       const {rows} = await pool.query('SELECT id, action, entity_id AS "entityId", title, version, actor, created FROM audit_entries ORDER BY id DESC LIMIT 100')
       return rows

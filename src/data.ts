@@ -29,9 +29,18 @@ export type Question = {
   updated: string
   priority: 'Tinggi' | 'Normal'
   reviewNote?: string
+  /** Ringkasan analisis terbaru dari server; tidak disimpan di data soal. */
+  analysis?: QuestionAnalysis
+  /** Konteks analisis yang memicu revisi atau pensiun soal. */
+  analysisContext?: AnalysisContext
   source?: 'ai'
   suggestedMetadata?: {title: string; tags: string[]}
 }
+
+export type Priority = 'high' | 'medium' | 'low'
+export type FollowUpDecision = 'keep' | 'revise' | 'retire'
+export type QuestionAnalysis = {version: number; analyzed: boolean; priority: Priority | null; runId: string; created: string; decision: FollowUpDecision | null}
+export type AnalysisContext = {runId: string; source: string; version: number; priority: Priority | null; reasons: string[]; difficulty: number | null; discrimination: number | null; decision: FollowUpDecision; reason: string; actor: string; created: string}
 
 export type QuestionFields = Pick<Question, 'title' | 'course' | 'topic' | 'level' | 'format' | 'stem' | 'options' | 'answer' | 'explanation'>
 export type QuestionInput = QuestionFields & {status: 'draft' | 'review'; changeNote: string}
@@ -44,12 +53,16 @@ export type QuestionHistory = {versions: QuestionVersion[]; reviews: ReviewEntry
 export type PackageInput = { id: string; name: string; course: Course; questionIds: string[] }
 export type PackageItem = {questionId: string; version: number; title: string; topic: string; level: Level}
 export type ExamPackage = Pick<PackageInput, 'id' | 'name' | 'course'> & {items: PackageItem[]; created: string}
-export type ExamImport = { id: string; name: string; rows: number; created: string }
+export type AnalysisSummary = {
+  participantCount: number; averageDifficulty: number | null; averageDiscrimination: number | null; effectiveDistractorShare: number | null
+  reliability: {kr20: number | null; note: string | null}; followUp: Record<Priority, number>
+}
+export type ExamImport = {
+  id: string; packageId: string; packageName: string; course: Course; period: string; fileName: string
+  participantCount: number; rowCount: number; actor: string; created: string; runId: string | null; analyzedAt: string | null; summary: AnalysisSummary | null
+}
+export type ImportInput = {id: string; packageId: string; period: string; fileName: string; rows: Array<Record<string, string>>}
 export type Profile = { name: string; faculty: string }
-
-export const seedImports: ExamImport[] = [
-  {id: 'IMP-001', name: 'respons-uts-basis-data.csv', rows: 120, created: '2026-10-20T09:00:00'},
-]
 
 export const qualityRows = [
   {id: 'BS-251', course: 'Basis Data', title: 'Transaksi Basis Data', difficulty: 0.67, discrimination: 0.41, effective: 3, options: 3},
@@ -73,6 +86,11 @@ export const auditLabels = {
   'review.rejected': 'Soal ditolak',
   'package.created': 'Paket dibuat',
   'report.exported': 'Laporan dibuat',
+  'import.created': 'Hasil ujian diimpor',
+  'analysis.completed': 'Analisis CTT dijalankan',
+  'analysis.kept': 'Soal dipertahankan dari analisis',
+  'analysis.revision_requested': 'Revisi diminta dari analisis',
+  'question.retired': 'Soal dipensiunkan',
 } as const
 
 export type AuditAction = keyof typeof auditLabels
