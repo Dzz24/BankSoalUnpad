@@ -64,3 +64,61 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
 );
 
 CREATE INDEX IF NOT EXISTS auth_sessions_expiration ON auth_sessions(expires_at);
+
+-- Analisis CTT dan tindak lanjut soal (branch eksperimen exp/ctt-alur-penuh).
+CREATE TABLE IF NOT EXISTS exam_imports (
+  id text PRIMARY KEY,
+  package_id text NOT NULL REFERENCES exam_packages(id),
+  period text NOT NULL,
+  file_name text NOT NULL,
+  participant_count integer NOT NULL CHECK (participant_count > 0),
+  row_count integer NOT NULL CHECK (row_count > 0),
+  actor text NOT NULL,
+  created timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS exam_responses (
+  import_id text NOT NULL REFERENCES exam_imports(id),
+  participant_id text NOT NULL,
+  question_id text NOT NULL,
+  version integer NOT NULL,
+  response text NOT NULL DEFAULT '',
+  PRIMARY KEY (import_id, participant_id, question_id),
+  FOREIGN KEY (question_id, version) REFERENCES question_versions(question_id, version)
+);
+
+CREATE TABLE IF NOT EXISTS analysis_runs (
+  id text PRIMARY KEY,
+  import_id text NOT NULL UNIQUE REFERENCES exam_imports(id),
+  method text NOT NULL,
+  method_version text NOT NULL,
+  settings jsonb NOT NULL,
+  summary jsonb NOT NULL,
+  actor text NOT NULL,
+  created timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS analysis_results (
+  run_id text NOT NULL REFERENCES analysis_runs(id),
+  question_id text NOT NULL,
+  version integer NOT NULL,
+  analyzed boolean NOT NULL,
+  priority text CHECK (priority IN ('high', 'medium', 'low')),
+  result jsonb NOT NULL,
+  PRIMARY KEY (run_id, question_id),
+  FOREIGN KEY (question_id, version) REFERENCES question_versions(question_id, version)
+);
+
+CREATE INDEX IF NOT EXISTS analysis_results_question ON analysis_results(question_id);
+
+CREATE TABLE IF NOT EXISTS follow_up_decisions (
+  run_id text NOT NULL,
+  question_id text NOT NULL,
+  version integer NOT NULL,
+  decision text NOT NULL CHECK (decision IN ('keep', 'revise', 'retire')),
+  reason text NOT NULL,
+  actor text NOT NULL,
+  created timestamptz NOT NULL,
+  PRIMARY KEY (run_id, question_id),
+  FOREIGN KEY (run_id, question_id) REFERENCES analysis_results(run_id, question_id)
+);

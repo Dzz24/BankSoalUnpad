@@ -29,7 +29,14 @@ export async function createApplication({trustProxy = false} = {}) {
     }
   })
   api.use(auth.requireSession)
+  // Impor respons memerlukan batas lebih besar (200 peserta × 100 soal, NFR-03); rute ini dipasang sebelum parser umum.
+  api.post('/imports', express.json({limit: '8mb'}), async (request, response) => response.status(201).json(await workspace.analysis.createImport(request.body, response.locals.account)))
   api.use(express.json({limit: '128kb'}))
+  api.get('/imports', async (_request, response) => response.json(await workspace.analysis.listImports()))
+  api.post('/imports/:id/analysis', async (request, response) => response.status(201).json(await workspace.analysis.runAnalysis(request.params.id, request.body, response.locals.account)))
+  api.get('/analysis', async (_request, response) => response.json(await workspace.analysis.overview()))
+  api.post('/analysis/:runId/questions/:questionId/decision', async (request, response) =>
+    response.json(await workspace.analysis.decide(request.params.runId, request.params.questionId, request.body, response.locals.account)))
   api.get('/workspace', async (_request, response) => response.json(await workspace.list()))
   api.get('/questions/example', (_request, response) => response.json(draftExample))
   api.post('/questions', async (request, response) => {
@@ -47,7 +54,7 @@ export async function createApplication({trustProxy = false} = {}) {
   })
   api.use((_request, response) => response.status(404).json({message: 'Endpoint API tidak ditemukan.'}))
   api.use((error, _request, response, _next) => {
-    if (error instanceof ApiError) return response.status(error.status).json({message: error.message})
+    if (error instanceof ApiError) return response.status(error.status).json({message: error.message, ...(error.errors ? {errors: error.errors, errorCount: error.errorCount} : {})})
     if (error.type === 'entity.parse.failed') return response.status(400).json({message: 'Format JSON tidak valid.'})
     if (error.status === 413) return response.status(413).json({message: 'Ukuran permintaan terlalu besar.'})
     console.error(error)

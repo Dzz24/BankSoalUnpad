@@ -8,4 +8,5 @@ export const statusInfo = /** @type {const} */ ({
   revision: {label: 'Perlu Revisi', tone: 'red'},
   draft: {label: 'Draf', tone: 'purple'},
   rejected: {label: 'Ditolak', tone: 'gray'},
+  retired: {label: 'Dipensiunkan', tone: 'gray'},
 })

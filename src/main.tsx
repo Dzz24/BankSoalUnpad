@@ -8,7 +8,7 @@ import { AuthGate } from './Auth'
 import { Dashboard } from './Dashboard'
 import { AuditLog } from './History'
 import { QuestionBank, QuestionDialog, QuestionEditor, Review } from './Questions'
-import { seedImports, statusInfo, type ExamImport, type PackageInput, type Profile, type Question, type QuestionInput, type ReviewStatus } from './data'
+import { statusInfo, type PackageInput, type Profile, type Question, type QuestionInput, type ReviewStatus } from './data'
 import { Dialog, Empty, StatusPill } from './ui'
 import { Packages, Reports, Results, Settings } from './WorkspacePages'
 import './styles.css'
@@ -74,7 +74,6 @@ function App({user, onSignOut}: {user: AuthUser; onSignOut: () => Promise<void>}
   const [loadError, setLoadError] = useState('')
   const [loadAttempt, setLoadAttempt] = useState(0)
   const questions = workspace?.questions ?? []
-  const [imports, setImports] = useLocalState('imports', seedImports)
   const [profile, setProfile] = useLocalState<Profile>('profile:' + user.username, {name: user.name, faculty: 'FMIPA'})
   const [overlay, setOverlay] = useState<'search' | 'notifications' | 'profile' | null>(null)
   const [detail, setDetail] = useState<{id: string; review: boolean} | null>(null)
@@ -175,9 +174,8 @@ function App({user, onSignOut}: {user: AuthUser; onSignOut: () => Promise<void>}
     setToast('Paket ujian disimpan.')
   }
 
-  function addImport(item: ExamImport) {
-    setImports((previous) => [item, ...previous])
-    setToast('Riwayat impor disimpan.')
+  function refreshWorkspace() {
+    getWorkspace().then(setWorkspace).catch(() => setToast('Data terbaru belum bisa dimuat. Muat ulang halaman.'))
   }
 
   async function signOut() {
@@ -236,9 +234,9 @@ function App({user, onSignOut}: {user: AuthUser; onSignOut: () => Promise<void>}
       {page === 'buat-soal' && (editingId && !editing
         ? <Empty title="Soal tidak tersedia untuk diedit" description="Pilih soal berstatus draf atau perlu revisi." action={<a className="button secondary" href="#/bank-soal">Kembali ke Bank Soal</a>} />
         : <QuestionEditor question={editing} onSave={submitQuestion} />)}
-      {page === 'analisis-kualitas' && <Analysis />}
+      {page === 'analisis-kualitas' && <Analysis params={params} questions={questions} onApplied={applyQuestion} onToast={setToast} />}
       {page === 'paket-ujian' && <Packages packages={workspace.packages} questions={questions} initialOpen={params.has('baru')} onAdd={addPackage} />}
-      {page === 'hasil-ujian' && <Results imports={imports} questions={questions} initialOpen={params.has('impor')} onAdd={addImport} />}
+      {page === 'hasil-ujian' && <Results packages={workspace.packages} questions={questions} initialOpen={params.has('impor') && params.get('impor') === '1'} onChanged={refreshWorkspace} onToast={setToast} />}
       {page === 'laporan' && <Reports questions={questions} />}
       {page === 'pengaturan' && <Settings profile={profile} onSave={(next) => {setProfile(next); setToast('Pengaturan disimpan.')}} />}
       {page === 'audit-log' && <AuditLog />}

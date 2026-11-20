@@ -1,4 +1,5 @@
-import type { AuditEntry, ExamPackage, PackageInput, Question, QuestionFields, QuestionHistory, QuestionInput, ReviewStatus } from './data'
+import type { AuditEntry, ExamImport, ExamPackage, FollowUpDecision, ImportInput, PackageInput, Question, QuestionFields, QuestionHistory, QuestionInput, ReviewStatus } from './data'
+import type { CttItemResult } from './CttPreview'
 
 export type Workspace = {questions: Question[]; packages: ExamPackage[]}
 export type AuthUser = {username: string; name: string}
@@ -16,7 +17,7 @@ async function request(path: string, init?: RequestInit) {
   if (!response.ok) {
     if (response.status === 401 && !path.startsWith('/auth/')) window.dispatchEvent(new Event(sessionEndedEvent))
     const body = await response.json().catch(() => null)
-    throw new Error(body?.message || 'Backend gagal memproses permintaan.')
+    throw Object.assign(new Error(body?.message || 'Backend gagal memproses permintaan.'), {errors: body?.errors as ImportError[] | undefined, errorCount: body?.errorCount as number | undefined})
   }
   return response
 }
@@ -60,3 +61,19 @@ export async function exportQuestionReport(course: string) {
   if (!response.headers.get('content-type')?.includes('text/csv')) throw new Error('File laporan tidak dapat dibuat.')
   return response.blob()
 }
+
+export type ImportError = {row: number | null; message: string}
+export type AnalysisResultRow = {
+  runId: string; importId: string; questionId: string; version: number; analyzed: boolean; priority: 'high' | 'medium' | 'low' | null
+  result: CttItemResult; title: string; currentStatus: Question['status']; currentVersion: number; owner: string
+  decision: {decision: FollowUpDecision; reason: string; actor: string; created: string} | null
+}
+export type AnalysisOverview = {imports: ExamImport[]; results: AnalysisResultRow[]}
+
+export const listImports = (signal?: AbortSignal) => json<ExamImport[]>('/imports', {signal})
+export const createImport = (input: ImportInput) => json<ExamImport>('/imports', body('POST', input))
+export const runAnalysis = (importId: string, blank: 'incorrect' | 'exclude') =>
+  json<ExamImport>(`/imports/${encodeURIComponent(importId)}/analysis`, body('POST', {blank}))
+export const getAnalysis = (signal?: AbortSignal) => json<AnalysisOverview>('/analysis', {signal})
+export const decideFollowUp = (runId: string, questionId: string, decision: FollowUpDecision, reason: string, revision: number) =>
+  json<Question>(`/analysis/${encodeURIComponent(runId)}/questions/${encodeURIComponent(questionId)}/decision`, body('POST', {decision, reason, revision}))

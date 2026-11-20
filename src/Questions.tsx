@@ -80,7 +80,7 @@ export function QuestionBank({questions, params, onOpen}: {questions: Question[]
               {visible.map((question) => <tr key={question.id}>
                 <th scope="row"><strong>{question.title}</strong><small className="long-id">{question.id} · v{question.version}</small></th>
                 <td>{question.course}</td><td>{question.format}</td><td>{question.owner}</td>
-                <td><StatusPill status={question.status} /></td>
+                <td><div className="analysis-pills"><StatusPill status={question.status} /><AnalysisPill question={question} /></div></td>
                 <td><button className="text-button" onClick={() => onOpen(question.id)} aria-label={`Detail ${question.title}`}>Detail <ArrowRight size={14} /></button></td>
               </tr>)}
             </tbody>
@@ -180,6 +180,11 @@ export function QuestionDialog({question, review, onClose, onDecision}: {
       </li>)}</ul>
       <div className="inset"><h4>Pembahasan</h4><p>{question.explanation || 'Pembahasan belum ditambahkan.'}</p></div>
       {question.reviewNote && <div className="inset"><h4>Catatan Review</h4><p>{question.reviewNote}</p></div>}
+      {question.analysisContext && <div className="inset"><h4>Konteks Analisis CTT</h4>
+        <p>{question.analysisContext.decision === 'retire' ? 'Dipensiunkan' : 'Dikembalikan untuk revisi'} berdasarkan hasil {question.analysisContext.source} (versi {question.analysisContext.version}).</p>
+        <p>{question.analysisContext.reasons.join(', ') || 'Tanpa penanda'} · p {question.analysisContext.difficulty === null ? '—' : question.analysisContext.difficulty.toFixed(2).replace('.', ',')} · D {question.analysisContext.discrimination === null ? '—' : question.analysisContext.discrimination.toFixed(2).replace('.', ',')}</p>
+        <p className="muted">Alasan: {question.analysisContext.reason} · @{question.analysisContext.actor}</p></div>}
+      {question.analysis && question.analysis.version === question.version && <p className="muted">Sudah dianalisis (CTT) pada {formatDate(question.analysis.created)}. <a href="#/analisis-kualitas">Lihat hasil analisis</a></p>}
       {review && <label className="field">Catatan Review<textarea rows={3} maxLength={2000} value={note} onChange={(event) => {setNote(event.target.value); setError('')}} placeholder="Tulis alasan atau saran perbaikan" /></label>}
       </>}
       {error && <p className="form-error" role="alert">{error}</p>}
@@ -309,4 +314,11 @@ export function QuestionEditor({question, onSave}: {question?: Question; onSave:
       </aside>
     </div>
   </>
+}
+
+export function AnalysisPill({question}: {question: Question}) {
+  const analysis = question.analysis
+  if (!analysis || analysis.version !== question.version || question.status !== 'approved') return null
+  if (analysis.priority && !analysis.decision) return <Pill tone="amber">Perlu ditinjau</Pill>
+  return <Pill tone="blue">Sudah dianalisis</Pill>
 }

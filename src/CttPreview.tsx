@@ -8,7 +8,7 @@ import { Pill } from './ui'
 export type ResponseRow = {id_peserta: string; id_soal: string; versi_soal: string; respons: string}
 
 type Priority = 'high' | 'medium' | 'low'
-type CttItemResult = {
+export type CttItemResult = {
   itemId: string
   version: number
   key: string
@@ -37,12 +37,12 @@ type CttResult = {
   issues: Array<{type: string; message: string}>
 }
 
-const priorityInfo: Record<Priority, {label: string; tone: Tone}> = {
+export const priorityInfo: Record<Priority, {label: string; tone: Tone}> = {
   high: {label: 'Tinggi', tone: 'red'},
   medium: {label: 'Sedang', tone: 'amber'},
   low: {label: 'Rendah', tone: 'blue'},
 }
-const sufficiencyLabel = {adequate: 'Memadai', indicative: 'Indikatif', insufficient: 'Belum memadai'}
+export const sufficiencyLabel = {adequate: 'Memadai', indicative: 'Indikatif', insufficient: 'Belum memadai'}
 const issueLabel: Record<string, string> = {
   'unknown-item': 'Soal atau versi tidak ditemukan di bank soal',
   'missing-row': 'Peserta tanpa baris untuk soal tertentu',
@@ -51,7 +51,7 @@ const issueLabel: Record<string, string> = {
   'invalid-response': 'Respons di luar opsi soal (dihitung salah)',
 }
 const blankLabel: Record<'incorrect' | 'exclude', string> = {incorrect: 'Dihitung salah', exclude: 'Tidak dihitung'}
-const choiceLabel: Record<string, string> = {blank: 'kosong', invalid: 'tidak valid', missing: 'tanpa baris'}
+export const choiceLabel: Record<string, string> = {blank: 'kosong', invalid: 'tidak valid', missing: 'tanpa baris'}
 const countOf = (item: {distribution: Record<string, {count: number}>}, choice: string) => item.distribution[choice]?.count ?? 0
 const number = (value: number | null) => value === null ? '—' : formatDecimal(value)
 
