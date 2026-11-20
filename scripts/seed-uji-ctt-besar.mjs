@@ -24,7 +24,7 @@ const pool = createPool()
 const database = new URL(process.env.DATABASE_URL ?? 'postgresql://x/x').pathname.slice(1)
 if (!database.endsWith('_exp') && !values.force) {
   console.error(`Database "${database}" bukan database eksperimen (*_exp). Skrip dihentikan. Pakai --force bila memang disengaja.`)
-  await pool.end()
+  await pool.end().catch(() => {})
   process.exit(1)
 }
 
@@ -161,5 +161,5 @@ try {
   console.log('Profil butir yang disimulasikan: sebagian besar baik, ditambah soal sangat mudah, sangat sukar, daya beda lemah,')
   console.log('pengecoh yang tidak dipilih, kunci yang diduga keliru, dan 8 soal terakhir yang banyak dikosongkan peserta berkemampuan rendah.')
 } finally {
-  await pool.end()
+  await pool.end().catch(() => {})
 }

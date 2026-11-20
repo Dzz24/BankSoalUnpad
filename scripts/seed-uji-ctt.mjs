@@ -15,7 +15,7 @@ const pool = createPool()
 const database = new URL(process.env.DATABASE_URL ?? 'postgresql://x/x').pathname.slice(1)
 if (!database.endsWith('_exp') && !values.force) {
   console.error(`Database "${database}" bukan database eksperimen (*_exp). Skrip dihentikan agar data utama tidak terisi soal uji. Pakai --force bila memang disengaja.`)
-  await pool.end()
+  await pool.end().catch(() => {})
   process.exit(1)
 }
 
@@ -80,5 +80,5 @@ try {
   console.log('  respons-uji-ctt.csv        40 peserta × 10 soal, siap diimpor')
   console.log('  respons-uji-ctt-salah.csv  berisi respons E, soal asing, jawaban ganda, dan versi salah untuk menguji validasi')
 } finally {
-  await pool.end()
+  await pool.end().catch(() => {})
 }
