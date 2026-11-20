@@ -33,6 +33,8 @@ export type Question = {
   analysis?: QuestionAnalysis
   /** Konteks analisis yang memicu revisi atau pensiun soal. */
   analysisContext?: AnalysisContext
+  source?: 'ai'
+  suggestedMetadata?: {title: string; tags: string[]}
 }
 
 export type Priority = 'high' | 'medium' | 'low'

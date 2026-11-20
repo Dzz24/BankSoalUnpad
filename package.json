@@ -14,7 +14,8 @@
     "db:migrate:sqlite": "node server/migrate-sqlite.mjs",
     "auth:create-user": "node server/create-user.mjs",
     "test": "node --test",
-    "ctt:demo": "node scripts/ctt-demo.mjs"
+    "ctt:demo": "node scripts/ctt-demo.mjs",
+    "test:ai": "node --test server/generate-questions.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",

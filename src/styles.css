@@ -376,6 +376,11 @@ legend { padding: 0; font-weight: 670; font-size: 13px; }
 .form-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .form-error { color: #a6263d; background: #fff0f2; border: 1px solid #f8dce3; border-radius: 8px; padding: 8px 10px; font-size: 12px; }
 .ai-message .button { margin-top: 10px; }
+.ai-generator, .generator-fields { display: grid; gap: 14px; }
+.generator-fields { margin: 0; padding: 0; border: 0; min-width: 0; }
+.generator-fields > .button { justify-self: start; }
+.generated-drafts { padding: 18px 22px; margin-bottom: 18px; display: grid; gap: 12px; }
+.generated-drafts nav { display: flex; gap: 8px; flex-wrap: wrap; }
 .settings-form { max-width: 530px; }
 .checkbox-row { display: flex; align-items: center; gap: 9px; padding: 8px 9px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
 .checkbox-row small { display: block; color: var(--muted); font-size: 10.5px; }

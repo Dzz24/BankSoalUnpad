@@ -11,6 +11,7 @@
   ],
   "functions": {
     "api/handler.js": {
+      "maxDuration": 60,
       "includeFiles": "server/schema.sql"
     }
   }

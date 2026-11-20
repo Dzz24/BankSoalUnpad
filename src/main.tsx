@@ -155,7 +155,14 @@ function App({user, onSignOut}: {user: AuthUser; onSignOut: () => Promise<void>}
     const question = await saveQuestion(id, input, revision)
     applyQuestion(question)
     setToast(question.status === 'review' ? 'Soal diajukan untuk review.' : 'Draf soal disimpan.')
+    if (params.has('batch') && question.status === 'draft') return
     window.location.hash = '/bank-soal'
+  }
+
+  function acceptGeneratedQuestions(drafts: Question[]) {
+    setWorkspace((previous) => previous && ({...previous, questions: [...drafts, ...previous.questions]}))
+    setToast(`${drafts.length} draf AI disimpan. Periksa setiap soal sebelum mengajukan review.`)
+    window.location.hash = '/buat-soal?' + new URLSearchParams({id: drafts[0].id, batch: drafts.map(({id}) => id).join(',')})
   }
 
   async function decide(question: Question, status: ReviewStatus, note: string) {
@@ -233,7 +240,8 @@ function App({user, onSignOut}: {user: AuthUser; onSignOut: () => Promise<void>}
       {page === 'review-soal' && <Review questions={questions} onOpen={openQuestion} />}
       {page === 'buat-soal' && (editingId && !editing
         ? <Empty title="Soal tidak tersedia untuk diedit" description="Pilih soal berstatus draf atau perlu revisi." action={<a className="button secondary" href="#/bank-soal">Kembali ke Bank Soal</a>} />
-        : <QuestionEditor question={editing} onSave={submitQuestion} />)}
+        : <QuestionEditor question={editing} onSave={submitQuestion} onGenerated={acceptGeneratedQuestions}
+          batchQuestions={(params.get('batch') ?? '').split(',').map((id) => questions.find((item) => item.id === id && ['draft', 'revision'].includes(item.status))).filter((item): item is Question => Boolean(item))} />)}
       {page === 'analisis-kualitas' && <Analysis params={params} questions={questions} onApplied={applyQuestion} onToast={setToast} />}
       {page === 'paket-ujian' && <Packages packages={workspace.packages} questions={questions} initialOpen={params.has('baru')} onAdd={addPackage} />}
       {page === 'hasil-ujian' && <Results packages={workspace.packages} questions={questions} initialOpen={params.has('impor') && params.get('impor') === '1'} onChanged={refreshWorkspace} onToast={setToast} />}

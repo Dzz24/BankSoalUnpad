@@ -1,5 +1,17 @@
 import type { AuditEntry, ExamImport, ExamPackage, FollowUpDecision, ImportInput, PackageInput, Question, QuestionFields, QuestionHistory, QuestionInput, ReviewStatus } from './data'
 import type { CttItemResult } from './CttPreview'
+import { cognitiveLevels } from '../shared/question-fields.js'
+
+export type GenerationInput = {
+  mode?: 'material' | 'topic'
+  material: string; topic: string; count: number; course: Question['course']
+  cognitiveLevel: (typeof cognitiveLevels)[number]['value']
+}
+export type GeneratedQuestion = {
+  stem: string; options: {id: string; text: string}[]; correctOptionId: string
+  explanation: string; topic: string; cognitiveLevel: GenerationInput['cognitiveLevel']
+  suggestedMetadata: {title: string; tags: string[]}
+}
 
 export type Workspace = {questions: Question[]; packages: ExamPackage[]}
 export type AuthUser = {username: string; name: string}
@@ -39,6 +51,8 @@ export const logIn = (username: string, password: string) => json<{session: Sess
 export const logOut = () => request('/auth/logout', {method: 'POST'})
 export const getWorkspace = (signal?: AbortSignal) => json<Workspace>('/workspace', {signal})
 export const getDraftExample = () => json<QuestionFields>('/questions/example')
+export const generateQuestions = (input: GenerationInput) =>
+  json<{questions: GeneratedQuestion[]; drafts: Question[]}>('/questions/generate', body('POST', input))
 
 export function saveQuestion(id: string, input: QuestionInput, revision?: number) {
   return revision === undefined
