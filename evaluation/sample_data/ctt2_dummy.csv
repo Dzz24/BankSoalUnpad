@@ -1,0 +1,4 @@
+﻿question_id,item_version,total_responses,difficulty_index,discrimination_index,correct_option,option_A_count,option_B_count,option_C_count,option_D_count
+Q001,2,32,0.63,0.32,B,5,20,4,3
+Q002,2,30,0.8,0.25,C,2,3,24,1
+Q003,2,31,0.58,0.2,A,18,4,5,4
