@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+data_private/
+hasil_evaluasi/
+hasil_evaluasi_ctt1/
+hasil_perbandingan/
